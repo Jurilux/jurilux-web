@@ -1,0 +1,46 @@
+name: Diagnose VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          {
+            echo "Host deploytarget"
+            echo "  HostName $HOST"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking accept-new"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Diagnose
+        run: |
+          ssh deploytarget bash -s <<'EOF'
+          echo "=== PORTS (8088/8089/7700) ==="
+          sudo ss -ltnp | grep -E ':8088|:8089|:7700' || echo "(rien en ecoute)"
+          echo "=== HEALTH 8088 ==="
+          curl -s -m 5 -o /dev/null -w 'health_http=%{http_code}\n' http://127.0.0.1:8088/health || echo curl_failed
+          echo "=== ASK 8088 ==="
+          curl -s -m 8 -X POST http://127.0.0.1:8088/api/ask -H 'Content-Type: application/json' -d '{"q":"test","topK":1,"temperature":0}' -w '\nask_http=%{http_code}\n' | head -c 600 || echo curl_failed
+          echo "=== SERVICES RUNNING ==="
+          systemctl list-units --type=service --state=running | grep -iE 'juri|meili|uvicorn|gunicorn|python|fastapi' || echo "(aucun service applicatif)"
+          echo "=== MEILISEARCH 7700 ==="
+          curl -s -m 5 -o /dev/null -w 'meili_http=%{http_code}\n' http://127.0.0.1:7700/health || echo "(pas de meili)"
+          echo "=== APP DIRS ==="
+          ls -la /opt /srv /data /home/deploy 2>/dev/null || true
+          echo "=== CADDY ==="
+          systemctl is-active caddy
+          echo "=== DONE ==="
+          EOF

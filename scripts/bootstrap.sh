@@ -69,7 +69,10 @@ fi
 echo "== 5. Caddyfile =="
 cat > /etc/caddy/Caddyfile <<CADDY
 :80 {
+    handle /health { reverse_proxy 127.0.0.1:8088 }
     handle /api/* { reverse_proxy 127.0.0.1:8088 }
+    handle_path /docs/* { root * /data/pdfs
+        file_server }
     handle { root * /var/www/juriscope/dev/current
         try_files {path} /index.html
         file_server }

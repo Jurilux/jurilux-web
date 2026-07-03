@@ -34,23 +34,17 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Debug SSH (verbose)
-        run: |
-          ssh -vvv -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "echo CONNECTED_OK; id; ls -la ~/.ssh" 2>&1 | tail -n 40 || true
-
-      - name: Upload release
+      - name: Deploy (rsync + activate)
+        env:
+          SSHOPTS: "-i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          TARGET: "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          BASE: "${{ secrets.DEPLOY_PATH }}"
         run: |
           TS="$(date +%F_%H%M%S)_${GITHUB_SHA::7}"
-          echo "RELEASE=$TS" >> "$GITHUB_ENV"
-          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-            dist/ \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/releases/$TS/"
-
-      - name: Activate release (atomic symlink)
-        run: |
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "sudo /usr/local/bin/jurilux-activate-release dev '$RELEASE'"
+          ssh $SSHOPTS "$TARGET" "sudo mkdir -p $BASE/releases/$TS && sudo chown -R ${{ secrets.DEPLOY_USER }}:${{ secrets.DEPLOY_USER }} $BASE/releases/$TS"
+          rsync -az --delete -e "ssh $SSHOPTS" dist/ "$TARGET:$BASE/releases/$TS/"
+          ssh $SSHOPTS "$TARGET" "sudo ln -sfn $BASE/releases/$TS $BASE/current && sudo chown -h ${{ secrets.DEPLOY_USER }}:www-data $BASE/current"
+          echo "Deployed release $TS"
 
       - name: Smoke test
         run: |

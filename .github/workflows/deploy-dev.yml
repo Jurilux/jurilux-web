@@ -32,9 +32,12 @@ jobs:
           mkdir -p ~/.ssh
           printf "%s\n" "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          echo "== derived public key =="
-          ssh-keygen -y -f ~/.ssh/deploy_key || echo "KEY LOAD FAILED"
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Debug SSH (verbose)
+        run: |
+          ssh -vvv -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "echo CONNECTED_OK; id; ls -la ~/.ssh" 2>&1 | tail -n 40 || true
 
       - name: Upload release
         run: |

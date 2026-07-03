@@ -1,0 +1,57 @@
+name: Deploy DEV (dev.jurilux.lu)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload release
+        run: |
+          TS="$(date +%F_%H%M%S)_${GITHUB_SHA::7}"
+          echo "RELEASE=$TS" >> "$GITHUB_ENV"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" \
+            dist/ \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/releases/$TS/"
+
+      - name: Activate release (atomic symlink)
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "sudo /usr/local/bin/jurilux-activate-release dev '$RELEASE'"
+
+      - name: Smoke test
+        run: |
+          sleep 2
+          curl -sSf -o /dev/null -w "front: %{http_code}\n" https://dev.jurilux.lu
+          curl -sSf -X POST https://dev.jurilux.lu/api/ask \
+            -H 'Content-Type: application/json' \
+            -d '{"q":"licenciement faute grave","topK":3,"temperature":0}' \
+            | head -c 200

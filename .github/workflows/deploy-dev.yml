@@ -28,23 +28,34 @@ jobs:
         run: npm run build
 
       - name: Setup SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
         run: |
           mkdir -p ~/.ssh
-          printf "%s\n" "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          {
+            echo "Host deploytarget"
+            echo "  HostName $HOST"
+            echo "  User $USER"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking accept-new"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+          echo "diag: host_len=${#HOST} user_len=${#USER} key_len=${#KEY}"
 
-      - name: Deploy (rsync + activate)
+      - name: Deploy
         env:
-          SSHOPTS: "-i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
-          TARGET: "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
-          BASE: "${{ secrets.DEPLOY_PATH }}"
+          BASE: ${{ secrets.DEPLOY_PATH }}
         run: |
           TS="$(date +%F_%H%M%S)_${GITHUB_SHA::7}"
-          ssh $SSHOPTS "$TARGET" "sudo mkdir -p $BASE/releases/$TS && sudo chown -R ${{ secrets.DEPLOY_USER }}:${{ secrets.DEPLOY_USER }} $BASE/releases/$TS"
-          rsync -az --delete -e "ssh $SSHOPTS" dist/ "$TARGET:$BASE/releases/$TS/"
-          ssh $SSHOPTS "$TARGET" "sudo ln -sfn $BASE/releases/$TS $BASE/current && sudo chown -h ${{ secrets.DEPLOY_USER }}:www-data $BASE/current"
-          echo "Deployed release $TS"
+          ssh deploytarget "sudo mkdir -p '$BASE/releases/$TS' && sudo chown -R deploy:deploy '$BASE/releases/$TS'"
+          rsync -az --delete dist/ "deploytarget:$BASE/releases/$TS/"
+          ssh deploytarget "sudo ln -sfn '$BASE/releases/$TS' '$BASE/current' && sudo chown -h deploy:www-data '$BASE/current'"
+          echo "Deployed $TS"
 
       - name: Smoke test
         run: |

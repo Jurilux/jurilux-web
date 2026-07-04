@@ -1,12 +1,13 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
-  adminOverview, adminUsers, adminQuestions, adminFeedback, adminSetPlan, adminSetAdmin, adminDeleteUser,
+  adminOverview, adminUsers, adminQuestions, adminFeedback, adminActivity, adminProbe,
+  adminSetPlan, adminSetAdmin, adminDeleteUser,
   adminLogin, logout, getStoredEmail, HttpError,
-  AdminOverview, AdminUser, AdminQuestion, AdminFeedback,
+  AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit,
 } from './api';
 
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
-type Tab = 'dashboard' | 'users' | 'questions' | 'feedback' | 'corpus';
+type Tab = 'dashboard' | 'inspector' | 'users' | 'questions' | 'feedback' | 'corpus';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
@@ -95,6 +96,31 @@ function StatTile({ label, value, hint, tone }: {
   );
 }
 
+function ActivityChart() {
+  const [days, setDays] = useState<ActivityDay[] | null>(null);
+  useEffect(() => { adminActivity().then(setDays).catch(() => setDays([])); }, []);
+  if (!days) return null;
+  const max = Math.max(1, ...days.map((d) => d.count));
+  const total = days.reduce((a, d) => a + d.count, 0);
+  return (
+    <div className="panel">
+      <div className="panel-title">Activité — questions par jour ({total} sur la période)</div>
+      {days.length === 0 ? (
+        <p className="muted small">Aucune question loguée sur la période.</p>
+      ) : (
+        <div className="bars">
+          {days.map((d) => (
+            <div className="bar-col" key={d.date} title={`${d.date} · ${d.count}`}>
+              <div className="bar-fill-v" style={{ height: `${Math.round((d.count / max) * 100)}%` }} />
+              <div className="bar-x">{d.date.slice(8)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({ ov }: { ov: AdminOverview }) {
   const m = ov.metrics;
   const refusalPct = m.refusal_rate == null ? null : Math.round(m.refusal_rate * 100);
@@ -122,6 +148,8 @@ function Dashboard({ ov }: { ov: AdminOverview }) {
         <StatTile label="Uptime API" value={fmtDuration(m.uptime_s)}
           hint={`prompt ${ov.prompt_version}`} />
       </div>
+
+      <ActivityChart />
 
       <div className="panel">
         <div className="panel-title">État système</div>
@@ -246,6 +274,74 @@ function Questions() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ---------- inspecteur de récupération ----------
+function probeBadge(st: string | null) {
+  const cls = st === 'law' ? 'st-law' : st === 'projet_loi' ? 'st-projet' : 'st-juris';
+  const label = st === 'law' ? 'Loi' : st === 'projet_loi' ? 'Projet' : 'Jurisprudence';
+  return <span className={`probe-badge ${cls}`}>{label}</span>;
+}
+
+function InspectorTab() {
+  const [q, setQ] = useState('');
+  const [topK, setTopK] = useState(12);
+  const [hits, setHits] = useState<ProbeHit[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!q.trim()) return;
+    setBusy(true); setError(null);
+    try { const d = await adminProbe(q.trim(), topK); setHits(d.hits); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Échec'); }
+    finally { setBusy(false); }
+  };
+
+  const counts = (hits || []).reduce((acc, h) => {
+    const k = h.source_type || 'autre'; acc[k] = (acc[k] || 0) + 1; return acc;
+  }, {} as Record<string, number>);
+
+  return (
+    <div className="tab-body">
+      <p className="muted small">Voir ce que la <b>recherche</b> remonte pour une requête (sans IA, sans quota) — pour diagnostiquer et valider le retrieval.</p>
+      <form className="probe-form" onSubmit={run}>
+        <input value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Ex : conséquences d'une rupture de la période d'essai" />
+        <select value={topK} onChange={(e) => setTopK(Number(e.target.value))}>
+          {[8, 12, 20, 30].map((n) => <option key={n} value={n}>{n} résultats</option>)}
+        </select>
+        <button className="send" type="submit" disabled={busy || !q.trim()}>{busy ? '…' : 'Inspecter'}</button>
+      </form>
+
+      {error && <p className="warn">⚠ {error}</p>}
+
+      {hits && (
+        <>
+          <div className="probe-summary">
+            {Object.entries(counts).map(([k, n]) => (
+              <span key={k} className="probe-count">{probeBadge(k)} {n}</span>
+            ))}
+            {hits.length === 0 && <span className="muted">Aucun résultat.</span>}
+          </div>
+          <div className="probe-list">
+            {hits.map((h) => (
+              <div className={`probe-item probe-${h.source_type || 'autre'}`} key={h.chunk_id}>
+                <div className="probe-head">
+                  {probeBadge(h.source_type)}
+                  <span className="probe-doc mono">{h.doc_id}</span>
+                  {h.year && <span className="muted">· {h.year}</span>}
+                </div>
+                {h.title && <div className="probe-title">{h.title}</div>}
+                <div className="probe-snippet">{h.snippet}…</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -399,6 +495,7 @@ export default function AdminApp() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'dashboard', label: 'Tableau de bord' },
+    { key: 'inspector', label: 'Inspecteur' },
     { key: 'users', label: 'Utilisateurs' },
     { key: 'questions', label: 'Questions' },
     { key: 'feedback', label: 'Retours' },
@@ -425,6 +522,7 @@ export default function AdminApp() {
       <main className="admin-main">
         {error && <p className="warn">⚠ {error}</p>}
         {ov && tab === 'dashboard' && <Dashboard ov={ov} />}
+        {tab === 'inspector' && <InspectorTab />}
         {tab === 'users' && <Users />}
         {tab === 'questions' && <Questions />}
         {tab === 'feedback' && <FeedbackTab />}

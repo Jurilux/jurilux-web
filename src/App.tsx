@@ -133,6 +133,9 @@ function Sources({ citations }: { citations: Citation[] }) {
   );
 }
 
+// Version du build, injectée par la CI (VITE_APP_VERSION = git describe). 'dev' en local.
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -268,7 +271,7 @@ export default function App() {
           </button>
           <button className="send" disabled={!input.trim() || loading} onClick={() => submit(input)}>Envoyer</button>
         </div>
-        <p className="hint muted">Shift+Enter : nouvelle ligne — les réponses ne constituent pas un avis juridique.</p>
+        <p className="hint muted">Shift+Enter : nouvelle ligne — les réponses ne constituent pas un avis juridique.<span className="version" title="Version du build">{APP_VERSION}</span></p>
       </footer>
     </div>
   );

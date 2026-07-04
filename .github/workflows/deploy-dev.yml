@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # historique + tags complets pour `git describe`
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -25,7 +27,8 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build
-        run: npm run build
+        # Version affichée en bas de page = tag (ex. v1.0.0) ou v1.0.0-N-gSHA entre deux tags.
+        run: VITE_APP_VERSION="$(git describe --tags --always)" npm run build
 
       - name: Setup SSH
         env:

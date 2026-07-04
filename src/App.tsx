@@ -55,7 +55,7 @@ function CitationRow({ c, index }: { c: Citation; index: number }) {
   const badgeText = isProjet ? 'Projet de loi' : isLaw ? 'Loi' : 'Jurisprudence';
 
   return (
-    <div className="citation">
+    <div className={`citation cite-${isProjet ? 'projet' : isLaw ? 'law' : 'juris'}`}>
       <div className="citation-head" onClick={() => setOpen(!open)}>
         <span className="ref">[{index + 1}]</span>
         <span className={`badge ${badgeClass}`}>{badgeText}</span>
@@ -79,6 +79,39 @@ function CitationRow({ c, index }: { c: Citation; index: number }) {
       </div>
     </div>
   );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Rendu markdown minimal et SÛR : on échappe le HTML d'abord, puis on n'ajoute que
+// nos propres balises connues (titres, gras, listes, paragraphes). Les références
+// inline [ … doc_id … ] deviennent des exposants [n] renvoyant à la carte source.
+function renderAnswer(md: string, citations: Citation[]): string {
+  let text = escapeHtml(md || '');
+  citations.forEach((c, i) => {
+    if (!c.doc_id) return;
+    const id = c.doc_id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(`\\[[^\\]]*${id}[^\\]]*\\]`, 'g'),
+      `<sup class="refnum">${i + 1}</sup>`);
+  });
+  const inline = (s: string) => s
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  const out: string[] = [];
+  let list = '';
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = ''; } };
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (/^#{1,3}\s+/.test(line)) { closeList(); const lvl = line.startsWith('###') ? 3 : 2; out.push(`<h${lvl}>${inline(line.replace(/^#{1,3}\s+/, ''))}</h${lvl}>`); }
+    else if (/^[-*]\s+/.test(line)) { if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(line.replace(/^[-*]\s+/, ''))}</li>`); }
+    else if (/^\d+[.)]\s+/.test(line)) { if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(line.replace(/^\d+[.)]\s+/, ''))}</li>`); }
+    else if (line === '') { closeList(); }
+    else { closeList(); out.push(`<p>${inline(line)}</p>`); }
+  }
+  closeList();
+  return out.join('\n');
 }
 
 function AssistantMessage({ m, onSuggestion }: { m: Message; onSuggestion: (s: string) => void }) {
@@ -110,7 +143,7 @@ function AssistantMessage({ m, onSuggestion }: { m: Message; onSuggestion: (s: s
         </div>
         {m.content && <CopyButton text={m.content} />}
       </div>
-      <p className="answer">{m.content}</p>
+      <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, m.citations || []) }} />
 
       {m.status === 'partial' && m.feedback && (
         <div className="feedback">
@@ -136,7 +169,7 @@ function Sources({ citations }: { citations: Citation[] }) {
   const laws = citations.filter((c) => c.source_type === 'law');
   return (
     <div className="sources">
-      <p className="sources-title">Sources ({citations.length})</p>
+      <p className="sources-title">Sources · {citations.length} document{citations.length > 1 ? 's' : ''}</p>
       {[...juris, ...laws].map((c, i) => (
         <CitationRow key={`${c.doc_id}-${i}`} c={c} index={citations.indexOf(c)} />
       ))}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { ask, health, corpus, pdfHref, login, register, logout, getHistory, me, clearSession,
   getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
-import { juridictionLabel, lawTitle } from './juridictions';
+import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 
 interface Message {
   id: string;
@@ -24,7 +24,7 @@ const PRESETS = [
 function citationLabel(c: Citation): string {
   if (c.source_type === 'law') return lawTitle(c.title || c.doc_id);
   if (c.source_type === 'projet_loi') return c.title || c.doc_id;
-  return juridictionLabel(c.juridiction_key);
+  return jurisCourt(c.doc_id, c.juridiction_key);
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -54,14 +54,27 @@ function CitationRow({ c, index }: { c: Citation; index: number }) {
   const badgeClass = isProjet ? 'badge-projet' : isLaw ? 'badge-law' : 'badge-juris';
   const badgeText = isProjet ? 'Projet de loi' : isLaw ? 'Loi' : 'Jurisprudence';
 
+  // Métadonnées explicites (date, référence) — surtout pour la jurisprudence.
+  const meta: string[] = [];
+  if (!isLaw && !isProjet) {
+    const d = jurisDate(c.doc_id) || (c.year ? String(c.year) : null);
+    if (d) meta.push(d);
+    const r = jurisRef(c.doc_id);
+    if (r) meta.push(`Réf. ${r}`);
+  } else if (isProjet) {
+    const num = (c.doc_id || '').replace(/^chd-/, '');
+    if (num) meta.push(`n° ${num}`);
+    if (c.year) meta.push(String(c.year));
+  }
+
   return (
     <div className={`citation cite-${isProjet ? 'projet' : isLaw ? 'law' : 'juris'}`}>
       <div className="citation-head" onClick={() => setOpen(!open)}>
         <span className="ref">[{index + 1}]</span>
         <span className={`badge ${badgeClass}`}>{badgeText}</span>
         <span className="citation-title">{citationLabel(c)}</span>
-        {c.year ? <span className="year">{c.year}</span> : null}
       </div>
+      {meta.length > 0 && <div className="citation-meta">{meta.join(' · ')}</div>}
       {open && excerpt && <p className="excerpt">« {excerpt}… »</p>}
       <div className="citation-actions">
         {isProjet ? (
@@ -255,9 +268,12 @@ export default function App() {
     });
   }, []);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
-  const openHistory = async () => { setHistOpen(true); setHistory(await getHistory()); };
-  const doLogout = async () => { await logout(); setUser(null); setAccount(null); setHistOpen(false); };
+  const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
+  const openHistory = async () => { setMenuOpen(false); setHistOpen(true); setHistory(await getHistory()); };
+  const doLogout = async () => { await logout(); setUser(null); setAccount(null); setHistOpen(false); setMenuOpen(false); };
   const [filters, setFilters] = useState<SearchFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -314,29 +330,22 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <div className="brand">
-          <span className="logo">⚖</span>
-          <strong>Jurilux</strong>
-          <span className={`dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`} />
-          <span className="muted">{connected === null ? 'Vérification…' : connected ? 'Connecté' : 'Indisponible'}</span>
-        </div>
+        <button className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu">☰</button>
+        <button className="brand-btn" onClick={goHome} title="Retour à l'accueil">
+          <span className="logo">⚖</span><strong>Jurilux</strong>
+        </button>
+        <span className={`dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`} />
+        <span className="muted status-txt">{connected === null ? 'Vérification…' : connected ? 'Connecté' : 'Indisponible'}</span>
         <div className="header-actions">
-          <button className="ghost" onClick={() => { setMessages([]); setInput(''); }}>Nouvelle discussion</button>
-          {user ? (
-            <>
-              {account?.plan === 'student' && account.quota.limit != null && (
-                <span className={`quota-badge ${account.quota.remaining === 0 ? 'quota-out' : ''}`}
-                  title="Questions ce mois (plan étudiant)">
-                  {account.quota.used}/{account.quota.limit}
-                </span>
-              )}
-              <button className="ghost" onClick={openHistory}>Historique</button>
-              <span className="account-email" title={user}>{user}</span>
-              <button className="ghost" onClick={doLogout}>Déconnexion</button>
-            </>
-          ) : (
-            <button className="send account-btn" onClick={() => setAuthOpen(true)}>Se connecter</button>
+          {user && account?.plan === 'student' && account.quota.limit != null && (
+            <span className={`quota-badge ${account.quota.remaining === 0 ? 'quota-out' : ''}`}
+              title="Questions ce mois (plan étudiant)">
+              {account.quota.used}/{account.quota.limit}
+            </span>
           )}
+          {user
+            ? <span className="account-email" title={user}>{user}</span>
+            : <button className="send account-btn" onClick={() => setAuthOpen(true)}>Se connecter</button>}
         </div>
       </header>
 
@@ -439,6 +448,48 @@ export default function App() {
           {' '}— licence ouverte, décisions pseudonymisées et reproduites sans modification.
         </p>
       </footer>
+
+      {menuOpen && (
+        <div className="drawer-overlay left" onClick={() => setMenuOpen(false)}>
+          <aside className="drawer nav-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-head">
+              <div className="brand"><span className="logo">⚖</span><strong>Jurilux</strong></div>
+              <button className="ghost close" onClick={() => setMenuOpen(false)} aria-label="Fermer">✕</button>
+            </div>
+            <nav className="nav-list">
+              <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
+              {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
+              {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
+            </nav>
+
+            {user && account && (
+              <div className="nav-account">
+                <div className="nav-label">Mon compte</div>
+                <div className="account-email" title={user}>{user}</div>
+                <div className="plan-row">
+                  <span className={`plan-badge plan-${account.plan}`}>{account.plan === 'pro' ? 'Pro' : 'Étudiant'}</span>
+                  {account.quota.limit != null && (
+                    <span className="muted">{account.quota.remaining} / {account.quota.limit} questions restantes ce mois</span>
+                  )}
+                </div>
+                <button className="ghost" onClick={doLogout} style={{ marginTop: 10 }}>Déconnexion</button>
+              </div>
+            )}
+
+            {corpusInfo?.decisions != null && (
+              <div className="nav-account">
+                <div className="nav-label">Le corpus</div>
+                <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+                  <b>{corpusInfo.decisions.toLocaleString('fr-FR')}</b> décisions ·{' '}
+                  <b>{corpusInfo.texts?.toLocaleString('fr-FR')}</b> textes de loi ·{' '}
+                  <b>{corpusInfo.projets?.toLocaleString('fr-FR')}</b> projets de loi
+                  {corpusInfo.updated && <> · à jour au {corpusInfo.updated.split('-').reverse().join('/')}</>}
+                </p>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
-import { ask, health, corpus, pdfHref, login, register, logout, getHistory,
-  getStoredEmail, Citation, Corpus, Feedback, HistoryItem, SearchFilters } from './api';
+import { ask, health, corpus, pdfHref, login, register, logout, getHistory, me, clearSession,
+  getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { juridictionLabel, lawTitle } from './juridictions';
 
 interface Message {
@@ -209,12 +209,22 @@ export default function App() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [corpusInfo, setCorpusInfo] = useState<Corpus | null>(null);
   const [user, setUser] = useState<string | null>(getStoredEmail());
+  const [account, setAccount] = useState<Me | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [pedagogical, setPedagogical] = useState(false);
 
+  useEffect(() => {
+    if (getStoredEmail()) me().then((a) => {
+      if (a) { setAccount(a); setUser(a.email); }
+      else { clearSession(); setUser(null); }  // token expiré
+    });
+  }, []);
+
+  const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
   const openHistory = async () => { setHistOpen(true); setHistory(await getHistory()); };
-  const doLogout = async () => { await logout(); setUser(null); setHistOpen(false); };
+  const doLogout = async () => { await logout(); setUser(null); setAccount(null); setHistOpen(false); };
   const [filters, setFilters] = useState<SearchFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -237,7 +247,8 @@ export default function App() {
     setInput('');
     setLoading(true);
     try {
-      const res = await ask(question, 20, filters, 0);
+      const res = await ask(question, 20, filters, 0, pedagogical);
+      if (user) me().then(setAccount);  // rafraîchit le quota
       // Dédup : doc_id pour la jurisprudence, titre parsé pour les lois.
       const seen = new Set<string>();
       const citations = (res.citations || []).filter((c) => {
@@ -280,6 +291,12 @@ export default function App() {
           <button className="ghost" onClick={() => { setMessages([]); setInput(''); }}>Nouvelle discussion</button>
           {user ? (
             <>
+              {account?.plan === 'student' && account.quota.limit != null && (
+                <span className={`quota-badge ${account.quota.remaining === 0 ? 'quota-out' : ''}`}
+                  title="Questions ce mois (plan étudiant)">
+                  {account.quota.used}/{account.quota.limit}
+                </span>
+              )}
               <button className="ghost" onClick={openHistory}>Historique</button>
               <span className="account-email" title={user}>{user}</span>
               <button className="ghost" onClick={doLogout}>Déconnexion</button>
@@ -358,6 +375,10 @@ export default function App() {
             {activeFilters > 0 && <button className="ghost" onClick={() => setFilters({})}>Effacer</button>}
           </div>
         )}
+        <label className="pedago-toggle" title="Réponse didactique : principe → texte → jurisprudence">
+          <input type="checkbox" checked={pedagogical} onChange={(e) => setPedagogical(e.target.checked)} />
+          Mode pédagogique <span className="muted">(étudiant)</span>
+        </label>
         <div className="input-row">
           <textarea
             ref={inputRef}
@@ -386,7 +407,7 @@ export default function App() {
         </p>
       </footer>
 
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={setUser} />}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
 
       {histOpen && (
         <div className="drawer-overlay" onClick={() => setHistOpen(false)}>

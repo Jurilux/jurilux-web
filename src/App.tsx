@@ -17,11 +17,26 @@ interface Message {
   error?: string;
 }
 
-const PRESETS = [
-  "Quelles sont les conditions de résiliation d'un bail d'habitation au Luxembourg ?",
-  'Dans quels cas un licenciement avec effet immédiat est-il justifié selon la jurisprudence ?',
-  'Une absence injustifiée peut-elle constituer une faute grave ?',
-  'Quelle valeur probante les tribunaux reconnaissent-ils aux échanges d’emails ?',
+// Exemples groupés par thème — questions PRÉCISES vérifiées comme aboutissant
+// (une question trop large refuse ; on oriente l'utilisateur vers ce qui marche).
+const PRESET_GROUPS: { theme: string; questions: string[] }[] = [
+  { theme: 'Droit du travail', questions: [
+    'Dans quels cas un licenciement avec effet immédiat est-il justifié selon la jurisprudence ?',
+    'Quel est le préavis légal en cas de licenciement au Luxembourg ?',
+    'Une absence injustifiée peut-elle constituer une faute grave ?',
+    'Un employeur peut-il imposer des heures supplémentaires ?',
+  ] },
+  { theme: 'Bail & logement', questions: [
+    "Quelles sont les conditions de résiliation d'un bail d'habitation au Luxembourg ?",
+    'Le bailleur peut-il conserver la garantie locative après le départ du locataire ?',
+  ] },
+  { theme: 'Preuve & procédure', questions: [
+    'Quelle valeur probante les tribunaux reconnaissent-ils aux échanges d’emails ?',
+    "Quel est le délai pour faire appel d'un jugement civil ?",
+  ] },
+  { theme: 'Famille', questions: [
+    'Comment est fixée la pension alimentaire pour un enfant au Luxembourg ?',
+  ] },
 ];
 
 function citationLabel(c: Citation): string {
@@ -498,8 +513,13 @@ export default function App() {
               </p>
             )}
             <div className="presets">
-              {PRESETS.map((p, i) => (
-                <button key={i} onClick={() => submit(p)} disabled={loading}>{p}</button>
+              {PRESET_GROUPS.map((g) => (
+                <div className="preset-group" key={g.theme}>
+                  <div className="preset-theme">{g.theme}</div>
+                  {g.questions.map((p, i) => (
+                    <button key={i} onClick={() => submit(p)} disabled={loading}>{p}</button>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

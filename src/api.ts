@@ -120,6 +120,29 @@ export async function corpus(): Promise<Corpus | null> {
   }
 }
 
+// ---------- permaliens de réponses partageables ----------
+export interface SharedResponse {
+  question: string; answer: string | null; citations: Citation[];
+  status: string | null; created_at: string;
+}
+export async function createShare(question: string, answer: string | null,
+                                  citations: Citation[], status?: string): Promise<string> {
+  const res = await fetch('/api/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ question, answer, citations, status }),
+  });
+  if (!res.ok) throw new Error(`Le partage a échoué (HTTP ${res.status}).`);
+  return (await res.json()).id as string;
+}
+export async function getShare(id: string): Promise<SharedResponse | null> {
+  try {
+    const res = await fetch(`/api/share/${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    return (await res.json()) as SharedResponse;
+  } catch { return null; }
+}
+
 // URL PDF : toujours servie par notre propre domaine (/docs/<doc_id>.pdf).
 // Fallback : pdf_url absolue fournie par le backend (textes de loi filestore).
 export function pdfHref(c: Citation): string | null {

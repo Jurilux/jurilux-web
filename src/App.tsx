@@ -63,6 +63,38 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+// Construit un export Markdown de la réponse (question + réponse + sources), pour un dossier.
+function buildExport(m: Message): string {
+  const lines: string[] = ['# Question', '', m.question || '', '', '# Réponse Jurilux', '', m.content || ''];
+  if (m.citations && m.citations.length > 0) {
+    lines.push('', '## Sources', '');
+    m.citations.forEach((c, i) => {
+      const label = c.title || c.doc_id;
+      const raw = pdfHref(c) || c.url || '';
+      const href = raw && !raw.startsWith('http') ? window.location.origin + raw : raw;
+      lines.push(`${i + 1}. ${label}${href ? ` — ${href}` : ''}`);
+    });
+  }
+  lines.push('', '---', 'Généré par Jurilux (jurilux.lu) — ne constitue pas un avis juridique.');
+  return lines.join('\n');
+}
+
+function ExportButton({ m }: { m: Message }) {
+  const download = () => {
+    const blob = new Blob([buildExport(m)], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'jurilux-reponse.md';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  return (
+    <button className="copy-btn" onClick={download} title="Télécharger la réponse et ses sources (.md)">
+      Exporter
+    </button>
+  );
+}
+
 function ShareButton({ m }: { m: Message }) {
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
   const share = async () => {
@@ -261,6 +293,7 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
         {m.content && (
           <div className="msg-actions">
             <ShareButton m={m} />
+            <ExportButton m={m} />
             <CopyButton text={m.content} />
           </div>
         )}

@@ -378,6 +378,36 @@ a.nav-item { display: block; text-decoration: none; }
 .pill-indexing { font-family: var(--mono); font-size: 11px; color: var(--amber); background: var(--amber-soft);
   padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
 
+/* activité — barres verticales */
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding-top: 8px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.bar-fill-v { width: 100%; max-width: 22px; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; }
+.bar-x { font-size: 10px; color: var(--muted-2); font-variant-numeric: tabular-nums; }
+
+/* inspecteur de récupération */
+.probe-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.probe-form input { flex: 1; min-width: 220px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 10px; font: inherit; font-size: 14px; background: var(--card); color: var(--text); }
+.probe-form input:focus { outline: none; border-color: var(--primary); }
+.probe-form select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font: inherit;
+  background: var(--card); color: var(--text); }
+.probe-summary { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.probe-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.probe-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  padding: 2px 8px; border-radius: 999px; }
+.probe-badge.st-juris { background: var(--primary-soft); color: var(--primary); }
+.probe-badge.st-law { background: var(--amber-soft); color: var(--amber); }
+.probe-badge.st-projet { background: var(--green-soft); color: var(--green); }
+.probe-list { display: flex; flex-direction: column; gap: 8px; }
+.probe-item { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 10px;
+  padding: 10px 13px; background: var(--card); }
+.probe-item.probe-law { border-left-color: var(--amber); }
+.probe-item.probe-projet_loi { border-left-color: var(--green); }
+.probe-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.probe-doc { font-size: 12px; color: var(--muted); word-break: break-all; }
+.probe-title { font-size: 13.5px; font-weight: 600; margin-top: 5px; }
+.probe-snippet { font-size: 12.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+
 @media (max-width: 620px) {
   .admin-header { gap: 10px; }
   .bar-row { grid-template-columns: 100px 1fr; }

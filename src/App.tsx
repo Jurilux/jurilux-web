@@ -22,7 +22,9 @@ const PRESETS = [
 ];
 
 function citationLabel(c: Citation): string {
-  return c.source_type === 'law' ? lawTitle(c.title || c.doc_id) : juridictionLabel(c.juridiction_key);
+  if (c.source_type === 'law') return lawTitle(c.title || c.doc_id);
+  if (c.source_type === 'projet_loi') return c.title || c.doc_id;
+  return juridictionLabel(c.juridiction_key);
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -45,27 +47,35 @@ function CopyButton({ text }: { text: string }) {
 
 function CitationRow({ c, index }: { c: Citation; index: number }) {
   const [open, setOpen] = useState(false);
-  const href = pdfHref(c);
+  const isProjet = c.source_type === 'projet_loi';
   const isLaw = c.source_type === 'law';
+  const href = pdfHref(c);
   const excerpt = c.content ? c.content.replace(/\s+/g, ' ').trim().slice(0, 220) : null;
+  const badgeClass = isProjet ? 'badge-projet' : isLaw ? 'badge-law' : 'badge-juris';
+  const badgeText = isProjet ? 'Projet de loi' : isLaw ? 'Loi' : 'Jurisprudence';
 
   return (
     <div className="citation">
       <div className="citation-head" onClick={() => setOpen(!open)}>
         <span className="ref">[{index + 1}]</span>
-        <span className={`badge ${isLaw ? 'badge-law' : 'badge-juris'}`}>{isLaw ? 'Loi' : 'Jurisprudence'}</span>
+        <span className={`badge ${badgeClass}`}>{badgeText}</span>
         <span className="citation-title">{citationLabel(c)}</span>
         {c.year ? <span className="year">{c.year}</span> : null}
       </div>
       {open && excerpt && <p className="excerpt">« {excerpt}… »</p>}
       <div className="citation-actions">
-        {href && (
+        {isProjet ? (
+          c.url
+            ? <a href={c.url} target="_blank" rel="noopener noreferrer">Voir le dossier (chd.lu)</a>
+            : <span className="muted">Dossier indisponible</span>
+        ) : href ? (
           <>
             <a href={href} target="_blank" rel="noopener noreferrer">Ouvrir le PDF</a>
             <a href={href} download>Télécharger</a>
           </>
+        ) : (
+          <span className="muted">Document indisponible</span>
         )}
-        {!href && <span className="muted">Document indisponible</span>}
       </div>
     </div>
   );
@@ -217,7 +227,8 @@ export default function App() {
   const activeFilters =
     (typeof filters.year_min === 'number' ? 1 : 0) +
     (typeof filters.year_max === 'number' ? 1 : 0) +
-    (filters.juridiction_key?.trim() ? 1 : 0);
+    (filters.juridiction_key?.trim() ? 1 : 0) +
+    (filters.source_type ? 1 : 0);
 
   async function submit(q: string) {
     const question = q.trim();
@@ -319,6 +330,16 @@ export default function App() {
       <footer>
         {showFilters && (
           <div className="filters">
+            <label>
+              Type
+              <select value={filters.source_type ?? ''}
+                onChange={(e) => setFilters({ ...filters, source_type: e.target.value || undefined })}>
+                <option value="">Tous</option>
+                <option value="jurisprudence">Jurisprudence</option>
+                <option value="law">Textes de loi</option>
+                <option value="projet_loi">Projets de loi</option>
+              </select>
+            </label>
             <label>
               Année min
               <input type="number" min={1900} max={2100} value={filters.year_min ?? ''}

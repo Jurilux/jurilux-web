@@ -6,6 +6,7 @@ export interface SearchFilters {
   year_min?: number;
   year_max?: number;
   juridiction_key?: string;
+  source_type?: string;   // jurisprudence | law | projet_loi
 }
 
 export interface Citation {
@@ -15,7 +16,7 @@ export interface Citation {
   year?: number | null;
   juridiction_key?: string | null;
   content?: string;
-  source_type?: 'jurisprudence' | 'law';
+  source_type?: 'jurisprudence' | 'law' | 'projet_loi';
   title?: string;
 }
 
@@ -107,6 +108,7 @@ export async function corpus(): Promise<Corpus | null> {
 // URL PDF : toujours servie par notre propre domaine (/docs/<doc_id>.pdf).
 // Fallback : pdf_url absolue fournie par le backend (textes de loi filestore).
 export function pdfHref(c: Citation): string | null {
+  if (c.source_type === 'projet_loi') return null;  // dossier externe (c.url), pas de PDF /docs
   if (c.source_type === 'law') {
     return c.pdf_url || null;
   }

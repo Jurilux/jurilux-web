@@ -307,6 +307,10 @@ export const adminQuestions = (limit = 100) =>
 export const adminFeedback = () =>
   adminGet<{ items: AdminFeedback[]; stats: AdminOverview['feedback'] }>('/api/admin/feedback');
 
+export interface EvalResult { question: string; count: number; has_law: boolean; has_juris: boolean; laws: string[]; }
+export interface EvalReport { total: number; with_law: number; with_juris: number; results: EvalResult[]; }
+export const adminEval = () => adminGet<EvalReport>('/api/admin/eval');
+
 export interface ActivityDay { date: string; count: number; }
 export const adminActivity = () =>
   adminGet<{ per_day: ActivityDay[] }>('/api/admin/activity').then((d) => d.per_day);

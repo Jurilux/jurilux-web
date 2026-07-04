@@ -43,6 +43,7 @@ export async function ask(
   topK = 20,
   filters: SearchFilters = {},
   temperature = 0,
+  pedagogical = false,
 ): Promise<AskResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -54,6 +55,7 @@ export async function ask(
 
   const payload: Record<string, unknown> = { q, topK, temperature };
   if (Object.keys(cleaned).length > 0) payload.filters = cleaned;
+  if (pedagogical) payload.pedagogical = true;
 
   try {
     const res = await fetch('/api/ask', {
@@ -174,4 +176,18 @@ export async function getHistory(): Promise<HistoryItem[]> {
   const res = await fetch('/api/history', { headers: { ...authHeaders() } });
   if (!res.ok) return [];
   return (await res.json()).items as HistoryItem[];
+}
+
+export interface Quota { plan?: string; limit: number | null; used: number; remaining: number | null; }
+export interface Me { email: string; plan: string; quota: Quota; }
+
+export async function me(): Promise<Me | null> {
+  try {
+    const res = await fetch('/api/me', { headers: { ...authHeaders() } });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return { email: d.user.email, plan: d.user.plan, quota: d.quota };
+  } catch {
+    return null;
+  }
 }

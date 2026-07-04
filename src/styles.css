@@ -172,3 +172,12 @@ button.ghost:hover { color: var(--text); }
   padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
   font: inherit; background: var(--bg); color: var(--text);
 }
+
+/* Mode étudiant : badge quota + toggle pédagogique */
+.quota-badge { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  background: var(--primary-soft); color: var(--primary); font-variant-numeric: tabular-nums; }
+.quota-badge.quota-out { background: #fdecec; color: var(--ko); }
+.pedago-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+  color: var(--text); margin-bottom: 8px; cursor: pointer; max-width: 720px;
+  margin-left: auto; margin-right: auto; }
+.pedago-toggle input { accent-color: var(--primary); }

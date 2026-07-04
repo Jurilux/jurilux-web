@@ -66,26 +66,67 @@ if ! command -v caddy >/dev/null 2>&1; then
   apt-get install -y caddy
 fi
 
-echo "== 5. Caddyfile =="
-cat > /etc/caddy/Caddyfile <<CADDY
+echo "== 5. Caddyfile (prod jurilux.lu + staging dev.jurilux.lu) =="
+mkdir -p /var/www/juriscope/prod /var/www/juriscope/dev
+# Blocs multi-lignes (forme stricte acceptée par `caddy validate`).
+cat > /etc/caddy/Caddyfile <<'CADDY'
+# Accès direct par IP (santé / debug) -> prod
 :80 {
-    handle /health { reverse_proxy 127.0.0.1:8088 }
-    handle /api/* { reverse_proxy 127.0.0.1:8088 }
-    handle_path /docs/* { root * /data/pdfs
-        file_server }
-    handle { root * /var/www/juriscope/dev/current
-        try_files {path} /index.html
-        file_server }
+	handle /health {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle_path /docs/* {
+		root * /data/pdfs
+		file_server
+	}
+	handle {
+		root * /var/www/juriscope/prod/current
+		try_files {path} /index.html
+		file_server
+	}
 }
+
+# Production — jurilux.lu + www (TLS auto)
+jurilux.lu, www.jurilux.lu {
+	encode zstd gzip
+	handle /health {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle_path /docs/* {
+		root * /data/pdfs
+		file_server
+	}
+	handle {
+		root * /var/www/juriscope/prod/current
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Staging — dev.jurilux.lu (TLS auto)
 dev.jurilux.lu {
-    encode zstd gzip
-    handle /health { reverse_proxy 127.0.0.1:8088 }
-    handle /api/* { reverse_proxy 127.0.0.1:8088 }
-    handle_path /docs/* { root * /data/pdfs
-        file_server }
-    handle { root * /var/www/juriscope/dev/current
-        try_files {path} /index.html
-        file_server }
+	encode zstd gzip
+	handle /health {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8088
+	}
+	handle_path /docs/* {
+		root * /data/pdfs
+		file_server
+	}
+	handle {
+		root * /var/www/juriscope/dev/current
+		try_files {path} /index.html
+		file_server
+	}
 }
 CADDY
 caddy fmt --overwrite /etc/caddy/Caddyfile || true

@@ -172,6 +172,18 @@ export async function logout(): Promise<void> {
     clearSession();
   }
 }
+export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || `Erreur (HTTP ${res.status})`);
+  }
+}
+
 export async function getHistory(): Promise<HistoryItem[]> {
   const res = await fetch('/api/history', { headers: { ...authHeaders() } });
   if (!res.ok) return [];
@@ -179,15 +191,85 @@ export async function getHistory(): Promise<HistoryItem[]> {
 }
 
 export interface Quota { plan?: string; limit: number | null; used: number; remaining: number | null; }
-export interface Me { email: string; plan: string; quota: Quota; }
+export interface Me { email: string; plan: string; is_admin: boolean; quota: Quota; }
 
 export async function me(): Promise<Me | null> {
   try {
     const res = await fetch('/api/me', { headers: { ...authHeaders() } });
     if (!res.ok) return null;
     const d = await res.json();
-    return { email: d.user.email, plan: d.user.plan, quota: d.quota };
+    return { email: d.user.email, plan: d.user.plan, is_admin: !!d.user.is_admin, quota: d.quota };
   } catch {
     return null;
   }
+}
+
+// ---------- Backoffice admin ----------
+// HttpError porte le code : le front distingue 401 (se connecter) de 403 (pas admin).
+export class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) { super(message); this.status = status; }
+}
+
+async function adminGet<T>(path: string): Promise<T> {
+  const res = await fetch(path, { headers: { ...authHeaders() } });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+  return (await res.json()) as T;
+}
+
+async function adminSend(path: string, method: string, body?: unknown): Promise<void> {
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+}
+
+export interface AdminOverview {
+  metrics: {
+    uptime_s: number; ask_total: number; ask_refused: number; ask_errors: number;
+    ask_rate_limited: number; refusal_rate: number | null;
+    ask_latency_ms_avg: number | null; last_ask_ago_s: number | null;
+  };
+  corpus: Corpus & { by_source?: Record<string, number> | null };
+  index: { documents: number | null; is_indexing: boolean | null };
+  health: { meilisearch: boolean; llm_configured: boolean };
+  users: { total: number; students: number; pros: number; admins: number };
+  questions: { total: number; last_24h: number; partial: number };
+  prompt_version: string;
+  model: string;
+  hybrid_semantic_ratio: number;
+}
+
+export interface AdminUser {
+  id: number; email: string; plan: string; is_admin: boolean;
+  created_at: string; questions: number;
+}
+
+export interface AdminQuestion {
+  id: number; email: string; question: string;
+  status: string | null; answer_preview: string | null; created_at: string;
+}
+
+export const adminOverview = () => adminGet<AdminOverview>('/api/admin/overview');
+export const adminUsers = () => adminGet<{ items: AdminUser[] }>('/api/admin/users').then((d) => d.items);
+export const adminQuestions = (limit = 100) =>
+  adminGet<{ items: AdminQuestion[] }>(`/api/admin/questions?limit=${limit}`).then((d) => d.items);
+export const adminSetPlan = (id: number, plan: string) =>
+  adminSend(`/api/admin/users/${id}/plan`, 'POST', { plan });
+export const adminSetAdmin = (id: number, is_admin: boolean) =>
+  adminSend(`/api/admin/users/${id}/admin`, 'POST', { is_admin });
+export const adminDeleteUser = (id: number) =>
+  adminSend(`/api/admin/users/${id}`, 'DELETE');
+
+// Connexion depuis le backoffice (réutilise le flux comptes ; ne stocke pas d'email si échec).
+export async function adminLogin(email: string, password: string): Promise<void> {
+  await login(email, password);
 }

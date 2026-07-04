@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, FormEvent } from 'react';
 import { ask, health, corpus, pdfHref, login, register, logout, getHistory, me, clearSession,
   getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
+import { LegalPage } from './Legal';
 
 interface Message {
   id: string;
@@ -269,6 +270,8 @@ export default function App() {
   }, []);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
+  const openLegal = () => { setMenuOpen(false); setLegalOpen(true); };
 
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
   const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
@@ -439,13 +442,10 @@ export default function App() {
           </button>
           <button className="send" disabled={!input.trim() || loading} onClick={() => submit(input)}>Envoyer</button>
         </div>
-        <p className="hint muted">Shift+Enter : nouvelle ligne — les réponses ne constituent pas un avis juridique.<span className="version" title="Version du build">{APP_VERSION}</span></p>
-        <p className="attribution muted">
-          Sources : jurisprudence publiée par la Justice via{' '}
-          <a href="https://data.public.lu/fr/organizations/administration-judiciaire/" target="_blank" rel="noopener noreferrer">data.public.lu</a>
-          {' '}et textes{' '}
-          <a href="https://legilux.public.lu" target="_blank" rel="noopener noreferrer">Legilux</a>
-          {' '}— licence ouverte, décisions pseudonymisées et reproduites sans modification.
+        <p className="hint muted">
+          Shift+Enter : nouvelle ligne · les réponses ne constituent pas un avis juridique ·{' '}
+          <button className="linklike legal-link" onClick={() => setLegalOpen(true)}>Mentions &amp; confidentialité</button>
+          <span className="version" title="Version du build">{APP_VERSION}</span>
         </p>
       </footer>
 
@@ -460,6 +460,7 @@ export default function App() {
               <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
               {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
+              <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
             </nav>
 
             {user && account && (
@@ -492,6 +493,8 @@ export default function App() {
       )}
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
+
+      {legalOpen && <LegalPage onClose={() => setLegalOpen(false)} />}
 
       {histOpen && (
         <div className="drawer-overlay" onClick={() => setHistOpen(false)}>

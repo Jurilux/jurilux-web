@@ -84,6 +84,25 @@ export async function health(): Promise<boolean> {
   }
 }
 
+// Périmètre du corpus (pour afficher « X décisions · Y textes · à jour »).
+export interface Corpus {
+  decisions: number | null;
+  texts: number | null;
+  updated: string | null;
+  chunks: number | null;
+  latest_year: number | null;
+}
+
+export async function corpus(): Promise<Corpus | null> {
+  try {
+    const res = await fetch('/api/corpus');
+    if (!res.ok) return null;
+    return (await res.json()) as Corpus;
+  } catch {
+    return null;
+  }
+}
+
 // URL PDF : toujours servie par notre propre domaine (/docs/<doc_id>.pdf).
 // Fallback : pdf_url absolue fournie par le backend (textes de loi filestore).
 export function pdfHref(c: Citation): string | null {

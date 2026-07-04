@@ -125,3 +125,9 @@ button.ghost:hover { color: var(--text); }
 .hint { font-size: 11px; text-align: center; margin-top: 6px; }
 .muted { color: var(--muted); }
 .version { margin-left: 8px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.corpus-scope { font-size: 13px; color: var(--muted); margin: 4px 0 0;
+  font-variant-numeric: tabular-nums; }
+.corpus-scope b { color: var(--text, inherit); font-weight: 600; }
+.attribution { font-size: 10.5px; line-height: 1.4; text-align: center; margin-top: 4px;
+  opacity: 0.75; }
+.attribution a { color: inherit; }

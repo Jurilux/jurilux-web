@@ -520,6 +520,7 @@ export default function App() {
             <nav className="nav-list">
               <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
               {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
+              {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
               <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
             </nav>

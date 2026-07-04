@@ -88,6 +88,7 @@ export async function health(): Promise<boolean> {
 export interface Corpus {
   decisions: number | null;
   texts: number | null;
+  projets: number | null;
   updated: string | null;
   chunks: number | null;
   latest_year: number | null;

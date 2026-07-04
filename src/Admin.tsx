@@ -1,13 +1,13 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
-  adminOverview, adminUsers, adminQuestions, adminFeedback, adminActivity, adminProbe,
+  adminOverview, adminUsers, adminQuestions, adminFeedback, adminActivity, adminProbe, adminEval,
   adminSetPlan, adminSetAdmin, adminDeleteUser,
   adminLogin, logout, getStoredEmail, HttpError,
-  AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit,
+  AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit, EvalReport,
 } from './api';
 
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
-type Tab = 'dashboard' | 'inspector' | 'users' | 'questions' | 'feedback' | 'corpus';
+type Tab = 'dashboard' | 'inspector' | 'eval' | 'users' | 'questions' | 'feedback' | 'corpus';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
@@ -346,6 +346,55 @@ function InspectorTab() {
   );
 }
 
+// ---------- banc de test (récupération) ----------
+function EvalTab() {
+  const [rep, setRep] = useState<EvalReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    setBusy(true); setError(null);
+    try { setRep(await adminEval()); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Échec'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="tab-body">
+      <p className="muted small">Gate qualité : 10 questions de référence passées dans la recherche.
+        « OK » = du droit remonte (proxy : le bon texte est trouvé). Rapide, sans IA — à relancer après chaque changement d'index.</p>
+      <div><button className="send" onClick={run} disabled={busy}>{busy ? 'Test en cours…' : 'Lancer le banc de test'}</button></div>
+      {error && <p className="warn">⚠ {error}</p>}
+      {rep && (
+        <>
+          <div className="stat-grid">
+            <StatTile label="Trouve du droit" value={`${rep.with_law} / ${rep.total}`}
+              tone={rep.with_law >= 8 ? 'ok' : rep.with_law >= 5 ? 'warn' : 'ko'} />
+            <StatTile label="Trouve de la jurisprudence" value={`${rep.with_juris} / ${rep.total}`} />
+          </div>
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Question de référence</th><th>Droit</th><th>Juris.</th><th>Textes remontés</th></tr></thead>
+              <tbody>
+                {rep.results.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.question}</td>
+                    <td>{r.has_law
+                      ? <span className="q-status st-ok">OK</span>
+                      : <span className="q-status st-partial">manque</span>}</td>
+                    <td>{r.has_juris ? '✓' : '—'}</td>
+                    <td className="mono" style={{ fontSize: 12 }}>{r.laws.join(', ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ---------- retours (satisfaction) ----------
 function FeedbackTab() {
   const [data, setData] = useState<{ items: AdminFeedback[]; stats: AdminOverview['feedback'] } | null>(null);
@@ -496,6 +545,7 @@ export default function AdminApp() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'dashboard', label: 'Tableau de bord' },
     { key: 'inspector', label: 'Inspecteur' },
+    { key: 'eval', label: 'Banc de test' },
     { key: 'users', label: 'Utilisateurs' },
     { key: 'questions', label: 'Questions' },
     { key: 'feedback', label: 'Retours' },
@@ -523,6 +573,7 @@ export default function AdminApp() {
         {error && <p className="warn">⚠ {error}</p>}
         {ov && tab === 'dashboard' && <Dashboard ov={ov} />}
         {tab === 'inspector' && <InspectorTab />}
+        {tab === 'eval' && <EvalTab />}
         {tab === 'users' && <Users />}
         {tab === 'questions' && <Questions />}
         {tab === 'feedback' && <FeedbackTab />}

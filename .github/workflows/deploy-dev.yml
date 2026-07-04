@@ -1,12 +1,16 @@
-name: Deploy DEV (dev.jurilux.lu)
+# Déploiement front par environnement :
+#   branche main → production (jurilux.lu)     → /var/www/juriscope/prod
+#   branche dev  → staging    (dev.jurilux.lu) → /var/www/juriscope/dev
+# Backend partagé (Caddy route /api,/health,/docs vers 127.0.0.1:8088).
+name: Deploy front (prod & staging)
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-dev
+  group: deploy-front-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -16,7 +20,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0      # historique + tags complets pour `git describe`
+          fetch-depth: 0      # historique + tags pour `git describe`
+
+      - name: Environnement cible
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "name=prod"   >> "$GITHUB_OUTPUT"
+            echo "domain=jurilux.lu" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=dev"    >> "$GITHUB_OUTPUT"
+            echo "domain=dev.jurilux.lu" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -27,7 +42,6 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build
-        # Version affichée en bas de page = tag (ex. v1.0.0) ou v1.0.0-N-gSHA entre deux tags.
         run: VITE_APP_VERSION="$(git describe --tags --always)" npm run build
 
       - name: Setup SSH
@@ -47,19 +61,20 @@ jobs:
             echo "  StrictHostKeyChecking accept-new"
           } > ~/.ssh/config
           chmod 600 ~/.ssh/config
-          echo "diag: host_len=${#HOST} key_len=${#KEY}"
 
       - name: Deploy
-        env:
-          BASE: ${{ secrets.DEPLOY_PATH }}
         run: |
+          BASE="/var/www/juriscope/${{ steps.env.outputs.name }}"
           TS="$(date +%F_%H%M%S)_${GITHUB_SHA::7}"
           ssh deploytarget "sudo mkdir -p '$BASE/releases/$TS' && sudo chown -R deploy:deploy '$BASE/releases/$TS'"
           rsync -az --delete dist/ "deploytarget:$BASE/releases/$TS/"
           ssh deploytarget "sudo ln -sfn '$BASE/releases/$TS' '$BASE/current' && sudo chown -h deploy:www-data '$BASE/current'"
-          echo "Deployed $TS"
+          # ne garder que les 5 dernières releases
+          ssh deploytarget "cd '$BASE/releases' && ls -1dt */ | tail -n +6 | xargs -r sudo rm -rf"
+          echo "Déployé $TS → $BASE (${{ steps.env.outputs.name }})"
 
       - name: Smoke test
         run: |
           sleep 2
-          curl -sSf -o /dev/null -w "front: %{http_code}\n" http://${{ secrets.DEPLOY_HOST }}/
+          curl -sSf -o /dev/null -w "front ${{ steps.env.outputs.name }} (${{ steps.env.outputs.domain }}): %{http_code}\n" \
+            "https://${{ steps.env.outputs.domain }}/"

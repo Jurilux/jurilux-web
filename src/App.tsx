@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
-import { ask, health, corpus, pdfHref, login, register, logout, getHistory, me, clearSession,
+import { ask, health, corpus, pdfHref, login, register, logout, changePassword, getHistory, me, clearSession,
   getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
@@ -249,6 +249,65 @@ function AuthModal({ onClose, onAuth }: { onClose: () => void; onAuth: (email: s
   );
 }
 
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (newPw !== confirmPw) { setError('Les deux nouveaux mots de passe ne correspondent pas.'); return; }
+    if (newPw.length < 8) { setError('Nouveau mot de passe trop court (8 caractères minimum).'); return; }
+    setBusy(true);
+    try {
+      await changePassword(oldPw, newPw);
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Échec');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Changer de mot de passe</h2>
+          <button className="ghost close" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        {done ? (
+          <>
+            <p className="ok-msg">✓ Mot de passe modifié.</p>
+            <button className="send" onClick={onClose}>Fermer</button>
+          </>
+        ) : (
+          <form onSubmit={submit} className="auth-form">
+            <label>Mot de passe actuel
+              <input type="password" required autoFocus value={oldPw}
+                onChange={(e) => setOldPw(e.target.value)} />
+            </label>
+            <label>Nouveau mot de passe
+              <input type="password" required minLength={8} value={newPw}
+                onChange={(e) => setNewPw(e.target.value)} placeholder="8 caractères minimum" />
+            </label>
+            <label>Confirmer le nouveau
+              <input type="password" required value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)} />
+            </label>
+            {error && <p className="warn">⚠ {error}</p>}
+            <button className="send" type="submit" disabled={busy}>{busy ? '…' : 'Enregistrer'}</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -272,6 +331,8 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
   const openLegal = () => { setMenuOpen(false); setLegalOpen(true); };
+  const [pwOpen, setPwOpen] = useState(false);
+  const openPassword = () => { setMenuOpen(false); setPwOpen(true); };
 
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
   const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
@@ -473,7 +534,10 @@ export default function App() {
                     <span className="muted">{account.quota.remaining} / {account.quota.limit} questions restantes ce mois</span>
                   )}
                 </div>
-                <button className="ghost" onClick={doLogout} style={{ marginTop: 10 }}>Déconnexion</button>
+                <div className="account-actions">
+                  <button className="ghost" onClick={openPassword}>Changer de mot de passe</button>
+                  <button className="ghost" onClick={doLogout}>Déconnexion</button>
+                </div>
               </div>
             )}
 
@@ -495,6 +559,8 @@ export default function App() {
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
 
       {legalOpen && <LegalPage onClose={() => setLegalOpen(false)} />}
+
+      {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
 
       {histOpen && (
         <div className="drawer-overlay" onClick={() => setHistOpen(false)}>

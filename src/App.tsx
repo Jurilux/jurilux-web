@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { ask, health, corpus, pdfHref, Citation, Corpus, Feedback, SearchFilters } from './api';
+import { useEffect, useRef, useState, FormEvent } from 'react';
+import { ask, health, corpus, pdfHref, login, register, logout, getHistory,
+  getStoredEmail, Citation, Corpus, Feedback, HistoryItem, SearchFilters } from './api';
 import { juridictionLabel, lawTitle } from './juridictions';
 
 interface Message {
@@ -136,12 +137,74 @@ function Sources({ citations }: { citations: Citation[] }) {
 // Version du build, injectée par la CI (VITE_APP_VERSION = git describe). 'dev' en local.
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
+function AuthModal({ onClose, onAuth }: { onClose: () => void; onAuth: (email: string) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const fn = mode === 'login' ? login : register;
+      const u = await fn(email.trim(), password);
+      onAuth(u.email);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Échec');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>{mode === 'login' ? 'Connexion' : 'Créer un compte'}</h2>
+          <button className="ghost close" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <form onSubmit={submit} className="auth-form">
+          <label>Email
+            <input type="email" required autoFocus value={email}
+              onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.lu" />
+          </label>
+          <label>Mot de passe
+            <input type="password" required minLength={8} value={password}
+              onChange={(e) => setPassword(e.target.value)} placeholder="8 caractères minimum" />
+          </label>
+          {error && <p className="warn">⚠ {error}</p>}
+          <button className="send" type="submit" disabled={busy}>
+            {busy ? '…' : mode === 'login' ? 'Se connecter' : "S'inscrire"}
+          </button>
+        </form>
+        <p className="muted switch">
+          {mode === 'login' ? "Pas encore de compte ? " : 'Déjà un compte ? '}
+          <button className="linklike" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
+            {mode === 'login' ? "S'inscrire" : 'Se connecter'}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [corpusInfo, setCorpusInfo] = useState<Corpus | null>(null);
+  const [user, setUser] = useState<string | null>(getStoredEmail());
+  const [authOpen, setAuthOpen] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  const openHistory = async () => { setHistOpen(true); setHistory(await getHistory()); };
+  const doLogout = async () => { await logout(); setUser(null); setHistOpen(false); };
   const [filters, setFilters] = useState<SearchFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -202,7 +265,18 @@ export default function App() {
           <span className={`dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`} />
           <span className="muted">{connected === null ? 'Vérification…' : connected ? 'Connecté' : 'Indisponible'}</span>
         </div>
-        <button className="ghost" onClick={() => { setMessages([]); setInput(''); }}>Nouvelle discussion</button>
+        <div className="header-actions">
+          <button className="ghost" onClick={() => { setMessages([]); setInput(''); }}>Nouvelle discussion</button>
+          {user ? (
+            <>
+              <button className="ghost" onClick={openHistory}>Historique</button>
+              <span className="account-email" title={user}>{user}</span>
+              <button className="ghost" onClick={doLogout}>Déconnexion</button>
+            </>
+          ) : (
+            <button className="send account-btn" onClick={() => setAuthOpen(true)}>Se connecter</button>
+          )}
+        </div>
       </header>
 
       <main>
@@ -290,6 +364,36 @@ export default function App() {
           {' '}— licence ouverte, décisions pseudonymisées et reproduites sans modification.
         </p>
       </footer>
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={setUser} />}
+
+      {histOpen && (
+        <div className="drawer-overlay" onClick={() => setHistOpen(false)}>
+          <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-head">
+              <h2>Mon historique</h2>
+              <button className="ghost close" onClick={() => setHistOpen(false)} aria-label="Fermer">✕</button>
+            </div>
+            {history.length === 0 ? (
+              <p className="muted">Aucune question enregistrée pour l'instant.</p>
+            ) : (
+              <ul className="hist-list">
+                {history.map((h) => (
+                  <li key={h.id}>
+                    <button className="hist-item" onClick={() => {
+                      setInput(h.question); setHistOpen(false); inputRef.current?.focus();
+                    }}>
+                      <span className="hist-q">{h.question}</span>
+                      <span className="hist-meta">{new Date(h.created_at).toLocaleDateString('fr-FR')}
+                        {h.status ? ` · ${h.status}` : ''}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

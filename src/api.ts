@@ -57,7 +57,7 @@ export async function ask(
   try {
     const res = await fetch('/api/ask', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -112,4 +112,64 @@ export function pdfHref(c: Citation): string | null {
   }
   if (c.doc_id) return `/docs/${c.doc_id}.pdf`;
   return c.pdf_url || null;
+}
+
+// ---------- Espace utilisateur ----------
+const TOKEN_KEY = 'jurilux_token';
+const EMAIL_KEY = 'jurilux_email';
+
+export interface AuthUser { email: string }
+export interface HistoryItem {
+  id: number; question: string; answer: string | null;
+  status: string | null; created_at: string;
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function getStoredEmail(): string | null {
+  return localStorage.getItem(EMAIL_KEY);
+}
+function authHeaders(): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+function storeSession(token: string, email: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(EMAIL_KEY, email);
+}
+export function clearSession(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(EMAIL_KEY);
+}
+
+async function authCall(path: string, email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `Erreur (HTTP ${res.status})`);
+  storeSession(data.token, data.user.email);
+  return data.user as AuthUser;
+}
+
+export function register(email: string, password: string): Promise<AuthUser> {
+  return authCall('/api/auth/register', email, password);
+}
+export function login(email: string, password: string): Promise<AuthUser> {
+  return authCall('/api/auth/login', email, password);
+}
+export async function logout(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', headers: { ...authHeaders() } });
+  } finally {
+    clearSession();
+  }
+}
+export async function getHistory(): Promise<HistoryItem[]> {
+  const res = await fetch('/api/history', { headers: { ...authHeaders() } });
+  if (!res.ok) return [];
+  return (await res.json()).items as HistoryItem[];
 }

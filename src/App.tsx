@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
-import { ask, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, getHistory, me, clearSession,
+import { ask, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
   getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
@@ -63,6 +63,25 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function ShareButton({ m }: { m: Message }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
+  const share = async () => {
+    setState('busy');
+    try {
+      const id = await createShare(m.question || '', m.content, m.citations || [], m.status || 'ok');
+      const url = `${window.location.origin}/r/${id}`;
+      try { await navigator.clipboard.writeText(url); } catch { /* presse-papier indisponible */ }
+      setState('done'); setTimeout(() => setState('idle'), 2500);
+    } catch { setState('err'); setTimeout(() => setState('idle'), 2500); }
+  };
+  return (
+    <button className="copy-btn" onClick={share} disabled={state === 'busy'}
+      title="Copier un lien vers cette réponse">
+      {state === 'done' ? '✓ Lien copié' : state === 'busy' ? '…' : state === 'err' ? 'Échec' : 'Partager'}
+    </button>
+  );
+}
+
 function CitationRow({ c, index }: { c: Citation; index: number }) {
   const [open, setOpen] = useState(false);
   const isProjet = c.source_type === 'projet_loi';
@@ -119,7 +138,7 @@ function escapeHtml(s: string): string {
 // Rendu markdown minimal et SÛR : on échappe le HTML d'abord, puis on n'ajoute que
 // nos propres balises connues (titres, gras, listes, paragraphes). Les références
 // inline [ … doc_id … ] deviennent des exposants [n] renvoyant à la carte source.
-function renderAnswer(md: string, citations: Citation[]): string {
+export function renderAnswer(md: string, citations: Citation[]): string {
   let text = escapeHtml(md || '');
   citations.forEach((c, i) => {
     if (!c.doc_id) return;
@@ -239,7 +258,12 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
         <div className="bubble-tag">
           Jurilux {m.status === 'partial' && <span className="badge badge-partial">Réponse partielle</span>}
         </div>
-        {m.content && <CopyButton text={m.content} />}
+        {m.content && (
+          <div className="msg-actions">
+            <ShareButton m={m} />
+            <CopyButton text={m.content} />
+          </div>
+        )}
       </div>
       <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, m.citations || []) }} />
 
@@ -258,7 +282,7 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
   );
 }
 
-function Sources({ citations, label }: { citations: Citation[]; label?: string }) {
+export function Sources({ citations, label }: { citations: Citation[]; label?: string }) {
   const juris = citations.filter((c) => c.source_type !== 'law');
   const laws = citations.filter((c) => c.source_type === 'law');
   return (

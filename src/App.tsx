@@ -216,8 +216,8 @@ export default function App() {
             {corpusInfo && corpusInfo.decisions != null && (
               <p className="corpus-scope">
                 Corpus : <b>{corpusInfo.decisions.toLocaleString('fr-FR')}</b> décisions
-                {corpusInfo.texts != null && <> · <b>{corpusInfo.texts}</b> codes</>}
-                {corpusInfo.latest_year && <> · jusqu'en {corpusInfo.latest_year}</>}
+                {corpusInfo.texts != null && <> · <b>{corpusInfo.texts.toLocaleString('fr-FR')}</b> textes de loi</>}
+                {corpusInfo.projets != null && <> · <b>{corpusInfo.projets.toLocaleString('fr-FR')}</b> projets de loi</>}
                 {corpusInfo.updated && <> · à jour au {corpusInfo.updated.split('-').reverse().join('/')}</>}
               </p>
             )}

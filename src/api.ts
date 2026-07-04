@@ -283,6 +283,27 @@ export const adminQuestions = (limit = 100) =>
   adminGet<{ items: AdminQuestion[] }>(`/api/admin/questions?limit=${limit}`).then((d) => d.items);
 export const adminFeedback = () =>
   adminGet<{ items: AdminFeedback[]; stats: AdminOverview['feedback'] }>('/api/admin/feedback');
+
+export interface ActivityDay { date: string; count: number; }
+export const adminActivity = () =>
+  adminGet<{ per_day: ActivityDay[] }>('/api/admin/activity').then((d) => d.per_day);
+
+export interface ProbeHit {
+  chunk_id: string; doc_id: string; source_type: string | null;
+  title: string | null; year: number | null; juridiction_key: string | null; snippet: string;
+}
+export async function adminProbe(q: string, topK = 12): Promise<{ count: number; hits: ProbeHit[] }> {
+  const res = await fetch('/api/admin/probe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ q, topK }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+  return (await res.json()) as { count: number; hits: ProbeHit[] };
+}
 export const adminSetPlan = (id: number, plan: string) =>
   adminSend(`/api/admin/users/${id}/plan`, 'POST', { plan });
 export const adminSetAdmin = (id: number, is_admin: boolean) =>

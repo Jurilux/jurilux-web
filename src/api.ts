@@ -172,6 +172,18 @@ export async function logout(): Promise<void> {
     clearSession();
   }
 }
+export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || `Erreur (HTTP ${res.status})`);
+  }
+}
+
 export async function getHistory(): Promise<HistoryItem[]> {
   const res = await fetch('/api/history', { headers: { ...authHeaders() } });
   if (!res.ok) return [];

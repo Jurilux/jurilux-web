@@ -188,6 +188,8 @@ footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
   font-size: 14px; background: var(--card); color: var(--text); }
 .auth-form input:focus { outline: none; border-color: var(--primary); }
 .auth-form .send { margin-top: 4px; }
+.account-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.ok-msg { color: var(--green); font-weight: 600; margin-bottom: 14px; }
 .switch { text-align: center; margin-top: 14px; font-size: 13px; }
 .linklike { background: none; border: none; color: var(--primary); cursor: pointer; font: inherit;
   padding: 0; text-decoration: underline; }

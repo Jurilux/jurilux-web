@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ask, health, pdfHref, Citation, Feedback, SearchFilters } from './api';
+import { ask, health, corpus, pdfHref, Citation, Corpus, Feedback, SearchFilters } from './api';
 import { juridictionLabel, lawTitle } from './juridictions';
 
 interface Message {
@@ -141,12 +141,14 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [corpusInfo, setCorpusInfo] = useState<Corpus | null>(null);
   const [filters, setFilters] = useState<SearchFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { health().then(setConnected); }, []);
+  useEffect(() => { corpus().then(setCorpusInfo); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
 
   const activeFilters =
@@ -211,6 +213,14 @@ export default function App() {
               Posez vos questions en langage naturel. Les réponses sont fondées sur la jurisprudence et la
               législation luxembourgeoises, avec sources vérifiables.
             </p>
+            {corpusInfo && corpusInfo.decisions != null && (
+              <p className="corpus-scope">
+                Corpus : <b>{corpusInfo.decisions.toLocaleString('fr-FR')}</b> décisions
+                {corpusInfo.texts != null && <> · <b>{corpusInfo.texts}</b> codes</>}
+                {corpusInfo.latest_year && <> · jusqu'en {corpusInfo.latest_year}</>}
+                {corpusInfo.updated && <> · à jour au {corpusInfo.updated.split('-').reverse().join('/')}</>}
+              </p>
+            )}
             <div className="presets">
               {PRESETS.map((p, i) => (
                 <button key={i} onClick={() => submit(p)} disabled={loading}>{p}</button>
@@ -272,6 +282,13 @@ export default function App() {
           <button className="send" disabled={!input.trim() || loading} onClick={() => submit(input)}>Envoyer</button>
         </div>
         <p className="hint muted">Shift+Enter : nouvelle ligne — les réponses ne constituent pas un avis juridique.<span className="version" title="Version du build">{APP_VERSION}</span></p>
+        <p className="attribution muted">
+          Sources : jurisprudence publiée par la Justice via{' '}
+          <a href="https://data.public.lu/fr/organizations/administration-judiciaire/" target="_blank" rel="noopener noreferrer">data.public.lu</a>
+          {' '}et textes{' '}
+          <a href="https://legilux.public.lu" target="_blank" rel="noopener noreferrer">Legilux</a>
+          {' '}— licence ouverte, décisions pseudonymisées et reproduites sans modification.
+        </p>
       </footer>
     </div>
   );

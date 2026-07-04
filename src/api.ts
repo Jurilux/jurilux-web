@@ -33,7 +33,20 @@ export interface AskResponse {
   refused: boolean;
   status?: 'ok' | 'partial';
   feedback?: Feedback | null;
+  suggested_question?: string | null;
   prompt_version?: string;
+}
+
+// Retour utilisateur 👍/👎 (+ ce qui manquait). Best-effort, ne bloque jamais l'UI.
+export async function sendFeedback(question: string, helpful: boolean,
+                                   missing?: string, status?: string): Promise<void> {
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ question, helpful, missing: missing || undefined, status }),
+    });
+  } catch { /* silencieux */ }
 }
 
 const TIMEOUT_MS = 60_000;
@@ -243,9 +256,15 @@ export interface AdminOverview {
   health: { meilisearch: boolean; llm_configured: boolean };
   users: { total: number; students: number; pros: number; admins: number };
   questions: { total: number; last_24h: number; partial: number };
+  feedback: { total: number; helpful: number; not_helpful: number; satisfaction: number | null };
   prompt_version: string;
   model: string;
   hybrid_semantic_ratio: number;
+}
+
+export interface AdminFeedback {
+  id: number; email: string | null; question: string; helpful: boolean;
+  missing: string | null; status: string | null; created_at: string;
 }
 
 export interface AdminUser {
@@ -262,6 +281,8 @@ export const adminOverview = () => adminGet<AdminOverview>('/api/admin/overview'
 export const adminUsers = () => adminGet<{ items: AdminUser[] }>('/api/admin/users').then((d) => d.items);
 export const adminQuestions = (limit = 100) =>
   adminGet<{ items: AdminQuestion[] }>(`/api/admin/questions?limit=${limit}`).then((d) => d.items);
+export const adminFeedback = () =>
+  adminGet<{ items: AdminFeedback[]; stats: AdminOverview['feedback'] }>('/api/admin/feedback');
 export const adminSetPlan = (id: number, plan: string) =>
   adminSend(`/api/admin/users/${id}/plan`, 'POST', { plan });
 export const adminSetAdmin = (id: number, is_admin: boolean) =>

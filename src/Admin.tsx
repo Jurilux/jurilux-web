@@ -1,12 +1,12 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
-  adminOverview, adminUsers, adminQuestions, adminSetPlan, adminSetAdmin, adminDeleteUser,
+  adminOverview, adminUsers, adminQuestions, adminFeedback, adminSetPlan, adminSetAdmin, adminDeleteUser,
   adminLogin, logout, getStoredEmail, HttpError,
-  AdminOverview, AdminUser, AdminQuestion,
+  AdminOverview, AdminUser, AdminQuestion, AdminFeedback,
 } from './api';
 
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
-type Tab = 'dashboard' | 'users' | 'questions' | 'corpus';
+type Tab = 'dashboard' | 'users' | 'questions' | 'feedback' | 'corpus';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
@@ -114,6 +114,9 @@ function Dashboard({ ov }: { ov: AdminOverview }) {
           hint={`${fmtNum(ov.users.pros)} pro · ${fmtNum(ov.users.admins)} admin`} />
         <StatTile label="Questions 24 h" value={fmtNum(ov.questions.last_24h)}
           hint={`${fmtNum(ov.questions.total)} loguées au total`} />
+        <StatTile label="Satisfaction" tone={ov.feedback.satisfaction != null && ov.feedback.satisfaction < 0.5 ? 'warn' : undefined}
+          value={ov.feedback.satisfaction == null ? '—' : `${Math.round(ov.feedback.satisfaction * 100)} %`}
+          hint={`${fmtNum(ov.feedback.helpful)} 👍 · ${fmtNum(ov.feedback.not_helpful)} 👎`} />
         <StatTile label="Corpus (chunks)" value={fmtNum(ov.corpus.chunks)}
           hint={`index Meili : ${fmtNum(ov.index.documents)}`} />
         <StatTile label="Uptime API" value={fmtDuration(m.uptime_s)}
@@ -247,6 +250,48 @@ function Questions() {
   );
 }
 
+// ---------- retours (satisfaction) ----------
+function FeedbackTab() {
+  const [data, setData] = useState<{ items: AdminFeedback[]; stats: AdminOverview['feedback'] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { adminFeedback().then(setData).catch((e) => setError(e.message)); }, []);
+
+  if (error) return <div className="tab-body"><p className="warn">⚠ {error}</p></div>;
+  if (!data) return <div className="tab-body"><p className="muted">Chargement…</p></div>;
+
+  return (
+    <div className="tab-body">
+      <div className="stat-grid">
+        <StatTile label="Satisfaction"
+          value={data.stats.satisfaction == null ? '—' : `${Math.round(data.stats.satisfaction * 100)} %`}
+          hint={`${fmtNum(data.stats.total)} retours`} />
+        <StatTile label="👍 Utiles" value={fmtNum(data.stats.helpful)} />
+        <StatTile label="👎 À améliorer" value={fmtNum(data.stats.not_helpful)}
+          tone={data.stats.not_helpful > 0 ? 'warn' : undefined} />
+      </div>
+      <p className="muted small">Retours des utilisateurs sur les réponses — le « ce qui manquait » guide l'amélioration du corpus et du prompt.</p>
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Date</th><th>Compte</th><th>Avis</th><th>Question</th><th>Ce qui manquait</th></tr></thead>
+          <tbody>
+            {data.items.map((f) => (
+              <tr key={f.id}>
+                <td className="muted nowrap">{fmtDate(f.created_at)}</td>
+                <td className="mono nowrap">{f.email || 'anonyme'}</td>
+                <td>{f.helpful ? '👍' : '👎'}</td>
+                <td><div className="q-text">{f.question}</div></td>
+                <td className="q-preview">{f.missing || '—'}</td>
+              </tr>
+            ))}
+            {data.items.length === 0 && <tr><td colSpan={5} className="muted">Aucun retour pour l'instant.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ---------- corpus ----------
 function CorpusTab({ ov, onRefresh, refreshing }: {
   ov: AdminOverview; onRefresh: () => void; refreshing: boolean;
@@ -356,6 +401,7 @@ export default function AdminApp() {
     { key: 'dashboard', label: 'Tableau de bord' },
     { key: 'users', label: 'Utilisateurs' },
     { key: 'questions', label: 'Questions' },
+    { key: 'feedback', label: 'Retours' },
     { key: 'corpus', label: 'Corpus' },
   ];
 
@@ -381,6 +427,7 @@ export default function AdminApp() {
         {ov && tab === 'dashboard' && <Dashboard ov={ov} />}
         {tab === 'users' && <Users />}
         {tab === 'questions' && <Questions />}
+        {tab === 'feedback' && <FeedbackTab />}
         {ov && tab === 'corpus' && <CorpusTab ov={ov} onRefresh={refresh} refreshing={refreshing} />}
       </main>
     </div>

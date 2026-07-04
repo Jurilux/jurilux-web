@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
-import { ask, health, corpus, pdfHref, login, register, logout, changePassword, getHistory, me, clearSession,
+import { ask, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, getHistory, me, clearSession,
   getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
@@ -8,10 +8,12 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  question?: string;               // question d'origine (pour feedback / élargir)
   citations?: Citation[];
   refused?: boolean;
   status?: 'ok' | 'partial';
   feedback?: Feedback | null;
+  suggested_question?: string | null;
   error?: string;
 }
 
@@ -128,24 +130,91 @@ function renderAnswer(md: string, citations: Citation[]): string {
   return out.join('\n');
 }
 
-function AssistantMessage({ m, onSuggestion }: { m: Message; onSuggestion: (s: string) => void }) {
+interface MsgActions {
+  onSuggestion: (s: string) => void;   // pré-remplit l'input (reformulation à ajuster)
+  onAsk: (q: string) => void;          // soumet directement (question-pivot)
+  onBroaden: (m: Message) => void;     // retire les filtres et relance la question
+  hasFilters: boolean;
+}
+
+// Boucle de satisfaction : 👍/👎 puis, si 👎, « qu'est-ce qui manquait ? ».
+function FeedbackBar({ question, status }: { question: string; status: string }) {
+  const [sent, setSent] = useState<'up' | 'down' | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [missing, setMissing] = useState('');
+
+  if (sent) return <div className="fb-bar"><span className="fb-thanks">Merci pour votre retour 🙏</span></div>;
+  if (asking) {
+    return (
+      <form className="fb-bar fb-missing" onSubmit={(e) => {
+        e.preventDefault(); sendFeedback(question, false, missing, status); setSent('down');
+      }}>
+        <input autoFocus value={missing} placeholder="Qu'est-ce qui manquait ?"
+          onChange={(e) => setMissing(e.target.value)} />
+        <button className="ghost" type="submit">Envoyer</button>
+      </form>
+    );
+  }
+  return (
+    <div className="fb-bar">
+      <span className="fb-q">Cette réponse vous aide ?</span>
+      <button className="fb-btn" title="Utile"
+        onClick={() => { sendFeedback(question, true, undefined, status); setSent('up'); }}>👍</button>
+      <button className="fb-btn" title="Pas utile" onClick={() => setAsking(true)}>👎</button>
+    </div>
+  );
+}
+
+// Rebond : question-pivot (1 clic) + reformulations prêtes + élargissement des filtres.
+function RecoveryActions({ m, actions }: { m: Message; actions: MsgActions }) {
+  const pivot = m.suggested_question;
+  const reforms = m.feedback?.how_to_improve || [];
+  if (!pivot && reforms.length === 0 && !actions.hasFilters) return null;
+  return (
+    <div className="recovery">
+      {pivot && (
+        <div className="pivot">
+          <span className="pivot-lead">👉 Je peux en revanche répondre précisément à :</span>
+          <button className="pivot-btn" onClick={() => actions.onAsk(pivot)}>{pivot}</button>
+        </div>
+      )}
+      {(reforms.length > 0 || actions.hasFilters) && (
+        <div className="reforms">
+          {reforms.length > 0 && <span className="reforms-lead">Ou affinez votre question :</span>}
+          {reforms.map((s, i) => (
+            <button key={i} className="chip" onClick={() => actions.onSuggestion(s)}>🔁 {s}</button>
+          ))}
+          {actions.hasFilters && (
+            <button className="chip" onClick={() => actions.onBroaden(m)}>🎚️ Élargir — retirer les filtres</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
   if (m.error) {
     return (
       <div className="bubble assistant">
         <div className="bubble-tag">Jurilux</div>
         <p className="warn">⚠ {m.error}</p>
+        <FeedbackBar question={m.question || ''} status="error" />
       </div>
     );
   }
   if (m.refused) {
+    const pistes = !!(m.citations && m.citations.length > 0);
     return (
       <div className="bubble assistant">
         <div className="bubble-tag">Jurilux</div>
-        <p className="warn">
-          <strong>Réponse non disponible.</strong> Les sources trouvées ne permettent pas de répondre avec
-          certitude. Reformulez en vous appuyant sur les décisions (ex. « Selon la jurisprudence citée… »).
+        <p className="rebound-lead">
+          Je n'ai pas de réponse certaine sur ce point précis{pistes ? ", mais voici ce que j'ai trouvé de plus proche." : "."}
         </p>
-        {m.citations && m.citations.length > 0 && <Sources citations={m.citations} />}
+        {m.feedback?.why && <p className="rebound-why">{m.feedback.why}</p>}
+        <RecoveryActions m={m} actions={actions} />
+        {pistes && <Sources citations={m.citations!} label="Pistes proches" />}
+        <FeedbackBar question={m.question || ''} status="refused" />
       </div>
     );
   }
@@ -159,31 +228,27 @@ function AssistantMessage({ m, onSuggestion }: { m: Message; onSuggestion: (s: s
       </div>
       <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, m.citations || []) }} />
 
-      {m.status === 'partial' && m.feedback && (
+      {m.status === 'partial' && m.feedback && (m.feedback.why || m.feedback.limits) && (
         <div className="feedback">
-          {m.feedback.why && <p><strong>Pourquoi :</strong> {m.feedback.why}</p>}
+          {m.feedback.why && <p><strong>Pourquoi partiel :</strong> {m.feedback.why}</p>}
           {m.feedback.limits && <p className="muted">{m.feedback.limits}</p>}
-          {m.feedback.how_to_improve && m.feedback.how_to_improve.length > 0 && (
-            <div className="suggestions">
-              {m.feedback.how_to_improve.map((s, i) => (
-                <button key={i} onClick={() => onSuggestion(s)}>{s}</button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
+      {m.status === 'partial' && <RecoveryActions m={m} actions={actions} />}
+
       {m.citations && m.citations.length > 0 && <Sources citations={m.citations} />}
+      <FeedbackBar question={m.question || ''} status={m.status || 'ok'} />
     </div>
   );
 }
 
-function Sources({ citations }: { citations: Citation[] }) {
+function Sources({ citations, label }: { citations: Citation[]; label?: string }) {
   const juris = citations.filter((c) => c.source_type !== 'law');
   const laws = citations.filter((c) => c.source_type === 'law');
   return (
     <div className="sources">
-      <p className="sources-title">Sources · {citations.length} document{citations.length > 1 ? 's' : ''}</p>
+      <p className="sources-title">{label || 'Sources'} · {citations.length} document{citations.length > 1 ? 's' : ''}</p>
       {[...juris, ...laws].map((c, i) => (
         <CitationRow key={`${c.doc_id}-${i}`} c={c} index={citations.indexOf(c)} />
       ))}
@@ -353,14 +418,14 @@ export default function App() {
     (filters.juridiction_key?.trim() ? 1 : 0) +
     (filters.source_type ? 1 : 0);
 
-  async function submit(q: string) {
+  async function submit(q: string, overrideFilters?: SearchFilters) {
     const question = q.trim();
     if (!question || loading) return;
     setMessages((prev) => [...prev, { id: `u${Date.now()}`, role: 'user', content: question }]);
     setInput('');
     setLoading(true);
     try {
-      const res = await ask(question, 20, filters, 0, pedagogical);
+      const res = await ask(question, 20, overrideFilters ?? filters, 0, pedagogical);
       if (user) me().then(setAccount);  // rafraîchit le quota
       // Dédup : doc_id pour la jurisprudence, titre parsé pour les lois.
       const seen = new Set<string>();
@@ -374,16 +439,19 @@ export default function App() {
         id: `a${Date.now()}`,
         role: 'assistant',
         content: res.answer || '',
+        question,
         citations,
         refused: res.refused,
         status: res.status,
         feedback: res.feedback,
+        suggested_question: res.suggested_question,
       }]);
     } catch (err) {
       setMessages((prev) => [...prev, {
         id: `e${Date.now()}`,
         role: 'assistant',
         content: '',
+        question,
         error: err instanceof Error ? err.message : String(err),
       }]);
     } finally {
@@ -441,7 +509,12 @@ export default function App() {
               m.role === 'user' ? (
                 <div key={m.id} className="bubble user"><p>{m.content}</p></div>
               ) : (
-                <AssistantMessage key={m.id} m={m} onSuggestion={(s) => { setInput(s); inputRef.current?.focus(); }} />
+                <AssistantMessage key={m.id} m={m} actions={{
+                  onSuggestion: (s) => { setInput(s); inputRef.current?.focus(); },
+                  onAsk: (qq) => submit(qq),
+                  onBroaden: (mm) => { setFilters({}); submit(mm.question || '', {}); },
+                  hasFilters: activeFilters > 0,
+                }} />
               ),
             )}
             {loading && <div className="bubble assistant"><div className="bubble-tag">Jurilux</div><p className="typing">Recherche dans les sources…</p></div>}

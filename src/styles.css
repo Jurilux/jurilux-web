@@ -120,6 +120,32 @@ main { flex: 1; overflow-y: auto; padding: 8px clamp(12px, 4vw, 24px); }
 }
 .suggestions button:hover { border-color: var(--amber); }
 
+/* ---------- cinématique de rebond (refus / partiel) ---------- */
+.rebound-lead { font-size: 15px; margin: 6px 0 4px; }
+.rebound-why { font-size: 13px; color: var(--muted); margin: 0 0 4px; }
+.recovery { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 10px; }
+.pivot { background: var(--primary-soft); border: 1px solid #d5e0ec; border-radius: 12px; padding: 11px 13px; }
+.pivot-lead { display: block; font-size: 12.5px; color: var(--primary-700); margin-bottom: 7px; font-weight: 500; }
+.pivot-btn { width: 100%; text-align: left; background: var(--card); border: 1px solid var(--primary);
+  color: var(--primary); border-radius: 10px; padding: 10px 13px; font: inherit; font-size: 14px;
+  font-weight: 600; cursor: pointer; transition: .15s; }
+.pivot-btn:hover { background: var(--primary); color: #fff; }
+.reforms { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.reforms-lead { font-size: 12.5px; color: var(--muted); width: 100%; margin-bottom: 2px; }
+.chip { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); cursor: pointer; font: inherit; transition: .15s; text-align: left; }
+.chip:hover { border-color: var(--primary); background: var(--primary-soft); }
+.fb-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border-2); flex-wrap: wrap; }
+.fb-q { font-size: 12.5px; color: var(--muted); }
+.fb-btn { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 3px 9px;
+  font-size: 14px; cursor: pointer; line-height: 1.4; }
+.fb-btn:hover { border-color: var(--primary); background: var(--primary-soft); }
+.fb-thanks { font-size: 12.5px; color: var(--green); }
+.fb-missing input { flex: 1; min-width: 180px; max-width: 340px; padding: 7px 11px; border: 1px solid var(--border);
+  border-radius: 8px; font: inherit; font-size: 13px; background: var(--card); color: var(--text); }
+.fb-missing input:focus { outline: none; border-color: var(--primary); }
+
 .copy-btn { font-size: 11px; border: none; background: none; color: var(--muted-2); cursor: pointer; }
 .copy-btn:hover { color: var(--text); }
 

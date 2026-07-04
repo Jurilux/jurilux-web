@@ -165,3 +165,10 @@ button.ghost:hover { color: var(--text); }
 .hist-item:hover { border-color: var(--primary); }
 .hist-q { font-size: 13.5px; color: var(--text); }
 .hist-meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Projets de loi : badge + select de filtre par type */
+.badge-projet { background: #e8f0e6; color: #2c6a3f; }
+.filters select {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+  font: inherit; background: var(--bg); color: var(--text);
+}

@@ -409,18 +409,22 @@ export interface InsightLawyer {
 }
 export interface InsightCase {
   display_name: string; doc_id: string; year: number | null; juridiction_key: string | null;
-  side?: string | null; won?: number | null;
+  side?: string | null; won?: number | null; matter?: string | null;
 }
 export interface InsightCoCounsel { name_key: string; name: string; count: number; relation: string; }
+export interface InsightMatter { name: string; count: number; }
 export interface InsightProfile {
   name_key: string; name: string; cases_count: number; first_year: number | null; last_year: number | null;
   as_demandeur: number; as_defendeur: number; won: number; lost: number; decided: number;
-  cocounsel: InsightCoCounsel[]; cases: InsightCase[];
+  matters: InsightMatter[]; cocounsel: InsightCoCounsel[]; cases: InsightCase[];
 }
 export const insightStats = () => adminGet<{ lawyers: number; appearances: number }>('/api/insight/stats');
-export const insightLawyers = (q = '', limit = 50) =>
+export const insightMatters = () => adminGet<{ items: InsightMatter[] }>('/api/insight/matters').then((d) => d.items);
+export const insightLawyers = (q = '', limit = 50, sort = 'cases', matter = '') =>
   adminGet<{ items: InsightLawyer[] }>(
-    `/api/insight/lawyers?limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ''}`).then((d) => d.items);
+    `/api/insight/lawyers?limit=${limit}&sort=${sort}`
+    + `${q ? `&q=${encodeURIComponent(q)}` : ''}${matter ? `&matter=${encodeURIComponent(matter)}` : ''}`
+  ).then((d) => d.items);
 export const insightLawyer = (key: string) =>
   adminGet<InsightProfile>(`/api/insight/lawyers/${encodeURIComponent(key)}`);
 

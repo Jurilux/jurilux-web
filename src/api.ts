@@ -259,6 +259,14 @@ export const addMember = (wid: number, email: string, role = 'member') =>
   wsSend<Member>(`/api/workspaces/${wid}/members`, 'POST', { email, role });
 export const removeMember = (wid: number, uid: number) =>
   wsSend<{ ok: boolean }>(`/api/workspaces/${wid}/members/${uid}`, 'DELETE');
+export const setMemberRole = (wid: number, uid: number, role: string) =>
+  wsSend<{ ok: boolean }>(`/api/workspaces/${wid}/members/${uid}/role`, 'POST', { role });
+export const deleteWorkspace = (wid: number) =>
+  wsSend<{ ok: boolean }>(`/api/workspaces/${wid}`, 'DELETE');
+export const leaveWorkspace = (wid: number) =>
+  wsSend<{ ok: boolean }>(`/api/workspaces/${wid}/leave`, 'POST');
+export const deleteDossier = (did: number) =>
+  wsSend<{ ok: boolean }>(`/api/dossiers/${did}`, 'DELETE');
 export const listDossiers = (wid: number) => wsGet<{ items: Dossier[] }>(`/api/workspaces/${wid}/dossiers`).then((d) => d.items);
 export const createDossier = (wid: number, name: string) =>
   wsSend<Dossier>(`/api/workspaces/${wid}/dossiers`, 'POST', { name });

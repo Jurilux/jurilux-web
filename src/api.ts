@@ -375,6 +375,7 @@ export interface AdminOverview {
     uptime_s: number; ask_total: number; ask_refused: number; ask_errors: number;
     ask_rate_limited: number; refusal_rate: number | null;
     ask_latency_ms_avg: number | null; last_ask_ago_s: number | null;
+    search_ms_avg: number | null; llm_ms_avg: number | null;
   };
   corpus: Corpus & { by_source?: Record<string, number> | null };
   index: { documents: number | null; is_indexing: boolean | null };

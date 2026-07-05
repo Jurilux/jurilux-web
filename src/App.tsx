@@ -585,137 +585,187 @@ export default function App() {
     }
   }
 
+  const filtersPanel = showFilters ? (
+    <div className="filters">
+      <label>Type
+        <select value={filters.source_type ?? ''}
+          onChange={(e) => setFilters({ ...filters, source_type: e.target.value || undefined })}>
+          <option value="">Tous</option>
+          <option value="jurisprudence">Jurisprudence</option>
+          <option value="law">Textes de loi</option>
+          <option value="projet_loi">Projets de loi</option>
+        </select>
+      </label>
+      <label>Année min
+        <input type="number" min={1900} max={2100} value={filters.year_min ?? ''}
+          onChange={(e) => setFilters({ ...filters, year_min: e.target.value ? Number(e.target.value) : undefined })} />
+      </label>
+      <label>Année max
+        <input type="number" min={1900} max={2100} value={filters.year_max ?? ''}
+          onChange={(e) => setFilters({ ...filters, year_max: e.target.value ? Number(e.target.value) : undefined })} />
+      </label>
+      <label>Juridiction
+        <input type="text" placeholder="ex : csj_ch04" value={filters.juridiction_key ?? ''}
+          onChange={(e) => setFilters({ ...filters, juridiction_key: e.target.value || undefined })} />
+      </label>
+      {activeFilters > 0 && <button className="ghost" onClick={() => setFilters({})}>Effacer</button>}
+    </div>
+  ) : null;
+
   return (
     <div className="app">
-      <header>
+      <aside className="sidebar">
+        <button className="side-brand" onClick={goHome} title="Nouvelle recherche">
+          <span className="side-mark">J</span><span className="side-name">Jurilux</span><span className="side-loc">LU</span>
+        </button>
+        <button className="side-cta" onClick={goHome}><span className="plus">+</span> Nouvelle recherche</button>
+
+        <div className="side-label">Rechercher</div>
+        <button className="nav-item active" onClick={goHome}><span className="ico">⌕</span> Recherche</button>
+        {user && <button className="nav-item" onClick={openHistory}><span className="ico">◷</span> Historique</button>}
+        {user && <button className="nav-item" onClick={openCabinet}><span className="ico">▤</span> Mon cabinet</button>}
+        {user && <button className="nav-item" onClick={openAlerts}>
+          <span className="ico">◆</span> Alertes{alertUnseen > 0 && <span className="badge">{alertUnseen}</span>}</button>}
+
+        {account?.is_admin && (
+          <>
+            <div className="side-label">Explorer</div>
+            <a className="nav-item" href="/insight"><span className="ico">⚖</span> Insight — avocats</a>
+            <a className="nav-item" href="/admin"><span className="ico">▦</span> Administration</a>
+          </>
+        )}
+
+        <div className="side-foot">
+          {user ? (
+            <div className="side-account">
+              <span className="avatar">{user.charAt(0).toUpperCase()}</span>
+              <span className="who">
+                <span className="em" title={user}>{user}</span>
+                <span className="plan">{account?.plan === 'pro' ? 'Plan pro' : 'Plan étudiant'}</span>
+              </span>
+              {account?.plan === 'student' && account.quota.limit != null &&
+                <span className="quota">{account.quota.used}/{account.quota.limit}</span>}
+            </div>
+          ) : (
+            <button className="side-signin" onClick={() => setAuthOpen(true)}>Se connecter</button>
+          )}
+          <button className="side-legal linklike" onClick={() => setLegalOpen(true)}>Mentions &amp; confidentialité</button>
+        </div>
+      </aside>
+
+      <header className="mobile-head">
         <button className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu">☰</button>
-        <button className="brand-btn" onClick={goHome} title="Retour à l'accueil">
+        <button className="brand-btn" onClick={goHome} title="Accueil">
           <span className="logo">⚖</span><strong>Jurilux</strong>
         </button>
-        <span className={`dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`} />
-        <span className="muted status-txt">{connected === null ? 'Vérification…' : connected ? 'Connecté' : 'Indisponible'}</span>
         <div className="header-actions">
           {user && account?.plan === 'student' && account.quota.limit != null && (
-            <span className={`quota-badge ${account.quota.remaining === 0 ? 'quota-out' : ''}`}
-              title="Questions ce mois (plan étudiant)">
+            <span className={`quota-badge ${account.quota.remaining === 0 ? 'quota-out' : ''}`}>
               {account.quota.used}/{account.quota.limit}
             </span>
           )}
-          {user
-            ? <span className="account-email" title={user}>{user}</span>
-            : <button className="send account-btn" onClick={() => setAuthOpen(true)}>Se connecter</button>}
+          {!user && <button className="send account-btn" onClick={() => setAuthOpen(true)}>Se connecter</button>}
         </div>
       </header>
 
-      <main>
+      <main className="workspace">
+        <div className="topbar">
+          <span className="status">
+            <span className={`dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`} />
+            {connected === null ? 'Vérification…' : connected ? 'Corpus connecté' : 'Service indisponible'}
+          </span>
+          <span className="spacer" />
+          <label className="pedago-mini" title="Réponse didactique : principe → texte → jurisprudence">
+            <input type="checkbox" checked={pedagogical} onChange={(e) => setPedagogical(e.target.checked)} />
+            Mode pédagogique
+          </label>
+        </div>
+
         {messages.length === 0 ? (
-          <div className="welcome">
-            <div className="hero-kicker">Recherche juridique · Grand-Duché de Luxembourg</div>
-            <h1>Assistant juridique Jurilux</h1>
-            <div className="hero-rule" aria-hidden="true" />
-            <p className="hero-lead">
-              Posez vos questions en langage naturel. Chaque réponse est fondée sur la jurisprudence et la
-              législation luxembourgeoises, avec des <b>sources vérifiables</b>.
-            </p>
-            {corpusInfo && corpusInfo.decisions != null && (
-              <p className="corpus-scope">
-                Corpus : <b>{corpusInfo.decisions.toLocaleString('fr-FR')}</b> décisions
-                {corpusInfo.texts != null && <> · <b>{corpusInfo.texts.toLocaleString('fr-FR')}</b> textes de loi</>}
-                {corpusInfo.projets != null && <> · <b>{corpusInfo.projets.toLocaleString('fr-FR')}</b> projets de loi</>}
-                {corpusInfo.updated && <> · à jour au {corpusInfo.updated.split('-').reverse().join('/')}</>}
-              </p>
-            )}
-            <div className="presets">
-              {PRESET_GROUPS.map((g) => (
-                <div className="preset-group" key={g.theme}>
-                  <div className="preset-theme">{g.theme}</div>
-                  {g.questions.map((p, i) => (
-                    <button key={i} onClick={() => submit(p)} disabled={loading}>{p}</button>
-                  ))}
+          <div className="content">
+            <div className="inner welcome">
+              <section className="hero">
+                <div className="hero-kicker">Recherche juridique · Grand-Duché de Luxembourg</div>
+                <h1>Quelle question de droit&nbsp;?</h1>
+                <p className="hero-lead">
+                  Posez-la en langage naturel. Chaque réponse est fondée sur la jurisprudence et la
+                  législation luxembourgeoises, avec des <b>sources vérifiables</b>.
+                </p>
+                <div className="search-hero">
+                  <textarea ref={inputRef} value={input} rows={1}
+                    placeholder="Ex. : un employeur peut-il imposer des heures supplémentaires ?"
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(input); } }} />
+                  <button className={`ghost filter-toggle ${activeFilters > 0 ? 'active' : ''}`} title="Filtres"
+                    onClick={() => setShowFilters(!showFilters)}>⚙{activeFilters > 0 ? ` ${activeFilters}` : ''}</button>
+                  <button className="go" disabled={!input.trim() || loading} onClick={() => submit(input)}>Rechercher</button>
                 </div>
-              ))}
+                {filtersPanel}
+                {corpusInfo && corpusInfo.decisions != null && (
+                  <p className="corpus-scope">
+                    <b>{corpusInfo.decisions.toLocaleString('fr-FR')}</b> décisions
+                    {corpusInfo.texts != null && <> · <b>{corpusInfo.texts.toLocaleString('fr-FR')}</b> textes de loi</>}
+                    {corpusInfo.projets != null && <> · <b>{corpusInfo.projets.toLocaleString('fr-FR')}</b> projets</>}
+                    {corpusInfo.updated && <> · à jour au {corpusInfo.updated.split('-').reverse().join('/')}</>}
+                  </p>
+                )}
+                <p className="hero-disclaimer">Les réponses ne constituent pas un avis juridique.</p>
+              </section>
+              <section className="suggest">
+                {PRESET_GROUPS.map((g) => (
+                  <div className="preset-group" key={g.theme}>
+                    <div className="preset-theme">{g.theme}</div>
+                    {g.questions.map((p, i) => (
+                      <button key={i} onClick={() => submit(p)} disabled={loading}>{p}</button>
+                    ))}
+                  </div>
+                ))}
+              </section>
             </div>
           </div>
         ) : (
-          <div className="thread">
-            {messages.map((m) =>
-              m.role === 'user' ? (
-                <div key={m.id} className="bubble user"><p>{m.content}</p></div>
-              ) : (
-                <AssistantMessage key={m.id} m={m} actions={{
-                  onSuggestion: (s) => { setInput(s); inputRef.current?.focus(); },
-                  onAsk: (qq) => submit(qq),
-                  onBroaden: (mm) => { setFilters({}); submit(mm.question || '', {}); },
-                  hasFilters: activeFilters > 0,
-                  onSave: (mm) => setSaveItem(mm),
-                  canSave: !!user,
-                }} />
-              ),
-            )}
-            <div ref={endRef} />
-          </div>
+          <>
+            <div className="content">
+              <div className="inner">
+                <div className="thread">
+                  {messages.map((m) =>
+                    m.role === 'user' ? (
+                      <div key={m.id} className="bubble user"><p>{m.content}</p></div>
+                    ) : (
+                      <AssistantMessage key={m.id} m={m} actions={{
+                        onSuggestion: (s) => { setInput(s); inputRef.current?.focus(); },
+                        onAsk: (qq) => submit(qq),
+                        onBroaden: (mm) => { setFilters({}); submit(mm.question || '', {}); },
+                        hasFilters: activeFilters > 0,
+                        onSave: (mm) => setSaveItem(mm),
+                        canSave: !!user,
+                      }} />
+                    ),
+                  )}
+                  <div ref={endRef} />
+                </div>
+              </div>
+            </div>
+            <div className="composer-bar">
+              <div className="inner">
+                {filtersPanel}
+                <div className="input-row">
+                  <textarea ref={inputRef} value={input} rows={1} placeholder="Poser une autre question…"
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(input); } }} />
+                  <button className={`ghost filter-toggle ${activeFilters > 0 ? 'active' : ''}`} title="Filtres"
+                    onClick={() => setShowFilters(!showFilters)}>⚙{activeFilters > 0 ? ` ${activeFilters}` : ''}</button>
+                  <button className="send" disabled={!input.trim() || loading} onClick={() => submit(input)}>Envoyer</button>
+                </div>
+                <p className="hint muted">
+                  Shift+Enter : nouvelle ligne · les réponses ne constituent pas un avis juridique
+                  <span className="version" title="Version du build">{APP_VERSION}</span>
+                </p>
+              </div>
+            </div>
+          </>
         )}
       </main>
-
-      <footer>
-        {showFilters && (
-          <div className="filters">
-            <label>
-              Type
-              <select value={filters.source_type ?? ''}
-                onChange={(e) => setFilters({ ...filters, source_type: e.target.value || undefined })}>
-                <option value="">Tous</option>
-                <option value="jurisprudence">Jurisprudence</option>
-                <option value="law">Textes de loi</option>
-                <option value="projet_loi">Projets de loi</option>
-              </select>
-            </label>
-            <label>
-              Année min
-              <input type="number" min={1900} max={2100} value={filters.year_min ?? ''}
-                onChange={(e) => setFilters({ ...filters, year_min: e.target.value ? Number(e.target.value) : undefined })} />
-            </label>
-            <label>
-              Année max
-              <input type="number" min={1900} max={2100} value={filters.year_max ?? ''}
-                onChange={(e) => setFilters({ ...filters, year_max: e.target.value ? Number(e.target.value) : undefined })} />
-            </label>
-            <label>
-              Juridiction
-              <input type="text" placeholder="ex : csj_ch04" value={filters.juridiction_key ?? ''}
-                onChange={(e) => setFilters({ ...filters, juridiction_key: e.target.value || undefined })} />
-            </label>
-            {activeFilters > 0 && <button className="ghost" onClick={() => setFilters({})}>Effacer</button>}
-          </div>
-        )}
-        <label className="pedago-toggle" title="Réponse didactique : principe → texte → jurisprudence">
-          <input type="checkbox" checked={pedagogical} onChange={(e) => setPedagogical(e.target.checked)} />
-          Mode pédagogique <span className="muted">(étudiant)</span>
-        </label>
-        <div className="input-row">
-          <textarea
-            ref={inputRef}
-            value={input}
-            rows={1}
-            placeholder="Posez votre question juridique…"
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(input); } }}
-          />
-          <button
-            className={`ghost filter-toggle ${activeFilters > 0 ? 'active' : ''}`}
-            title="Filtres (année, juridiction)"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            ⚙{activeFilters > 0 ? ` ${activeFilters}` : ''}
-          </button>
-          <button className="send" disabled={!input.trim() || loading} onClick={() => submit(input)}>Envoyer</button>
-        </div>
-        <p className="hint muted">
-          Shift+Enter : nouvelle ligne · les réponses ne constituent pas un avis juridique ·{' '}
-          <button className="linklike legal-link" onClick={() => setLegalOpen(true)}>Mentions &amp; confidentialité</button>
-          <span className="version" title="Version du build">{APP_VERSION}</span>
-        </p>
-      </footer>
 
       {menuOpen && (
         <div className="drawer-overlay left" onClick={() => setMenuOpen(false)}>

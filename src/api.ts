@@ -51,12 +51,15 @@ export async function sendFeedback(question: string, helpful: boolean,
 
 const TIMEOUT_MS = 60_000;
 
+export interface Turn { role: string; content: string; }
+
 export async function ask(
   q: string,
   topK = 20,
   filters: SearchFilters = {},
   temperature = 0,
   pedagogical = false,
+  history: Turn[] = [],
 ): Promise<AskResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -69,6 +72,7 @@ export async function ask(
   const payload: Record<string, unknown> = { q, topK, temperature };
   if (Object.keys(cleaned).length > 0) payload.filters = cleaned;
   if (pedagogical) payload.pedagogical = true;
+  if (history.length) payload.history = history;
 
   try {
     const res = await fetch('/api/ask', {
@@ -95,7 +99,7 @@ export async function ask(
 // onDelta reçoit chaque morceau de texte ; onMeta reçoit la méta finale (citations, refus…).
 export async function askStream(
   q: string, topK: number, filters: SearchFilters, temperature: number, pedagogical: boolean,
-  onDelta: (text: string) => void, onMeta: (meta: AskResponse) => void,
+  onDelta: (text: string) => void, onMeta: (meta: AskResponse) => void, history: Turn[] = [],
 ): Promise<void> {
   const cleaned: SearchFilters = {};
   if (typeof filters.year_min === 'number' && !isNaN(filters.year_min)) cleaned.year_min = filters.year_min;
@@ -105,6 +109,7 @@ export async function askStream(
   const payload: Record<string, unknown> = { q, topK, temperature };
   if (Object.keys(cleaned).length > 0) payload.filters = cleaned;
   if (pedagogical) payload.pedagogical = true;
+  if (history.length) payload.history = history;
 
   const res = await fetch('/api/ask/stream', {
     method: 'POST',

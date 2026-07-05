@@ -608,6 +608,10 @@ export default function App() {
         <input type="text" placeholder="ex : csj_ch04" value={filters.juridiction_key ?? ''}
           onChange={(e) => setFilters({ ...filters, juridiction_key: e.target.value || undefined })} />
       </label>
+      <label className="pedago-filter" title="Réponse didactique : principe → texte → jurisprudence">
+        <input type="checkbox" checked={pedagogical} onChange={(e) => setPedagogical(e.target.checked)} />
+        Mode pédagogique <span className="muted">(étudiant)</span>
+      </label>
       {activeFilters > 0 && <button className="ghost" onClick={() => setFilters({})}>Effacer</button>}
     </div>
   ) : null;
@@ -616,7 +620,9 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <button className="side-brand" onClick={goHome} title="Nouvelle recherche">
-          <span className="side-mark">J</span><span className="side-name">Jurilux</span><span className="side-loc">LU</span>
+          <span className="side-mark">J</span><span className="side-name">Jurilux</span>
+          <span className={`side-dot dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`}
+            title={connected === null ? 'Vérification du corpus…' : connected ? 'Corpus connecté' : 'Service indisponible'} />
         </button>
         <button className="side-cta" onClick={goHome}><span className="plus">+</span> Nouvelle recherche</button>
 
@@ -669,17 +675,6 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        <div className="topbar">
-          <span className="status">
-            <span className={`dot ${connected === null ? 'dot-wait' : connected ? 'dot-ok' : 'dot-ko'}`} />
-            {connected === null ? 'Vérification…' : connected ? 'Corpus connecté' : 'Service indisponible'}
-          </span>
-          <span className="spacer" />
-          <label className="pedago-mini" title="Réponse didactique : principe → texte → jurisprudence">
-            <input type="checkbox" checked={pedagogical} onChange={(e) => setPedagogical(e.target.checked)} />
-            Mode pédagogique
-          </label>
-        </div>
 
         {messages.length === 0 ? (
           <div className="content">

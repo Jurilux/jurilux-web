@@ -91,6 +91,48 @@ export async function ask(
   }
 }
 
+// Version STREAMÉE : la réponse s'affiche au fil de la génération (SSE).
+// onDelta reçoit chaque morceau de texte ; onMeta reçoit la méta finale (citations, refus…).
+export async function askStream(
+  q: string, topK: number, filters: SearchFilters, temperature: number, pedagogical: boolean,
+  onDelta: (text: string) => void, onMeta: (meta: AskResponse) => void,
+): Promise<void> {
+  const cleaned: SearchFilters = {};
+  if (typeof filters.year_min === 'number' && !isNaN(filters.year_min)) cleaned.year_min = filters.year_min;
+  if (typeof filters.year_max === 'number' && !isNaN(filters.year_max)) cleaned.year_max = filters.year_max;
+  if (filters.juridiction_key?.trim()) cleaned.juridiction_key = filters.juridiction_key.trim();
+  if (filters.source_type) cleaned.source_type = filters.source_type;
+  const payload: Record<string, unknown> = { q, topK, temperature };
+  if (Object.keys(cleaned).length > 0) payload.filters = cleaned;
+  if (pedagogical) payload.pedagogical = true;
+
+  const res = await fetch('/api/ask/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok || !res.body) throw new Error(`Le serveur a répondu HTTP ${res.status}.`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, sep).trim();
+      buf = buf.slice(sep + 2);
+      if (!raw.startsWith('data:')) continue;
+      let ev: { type?: string; text?: string } & Partial<AskResponse>;
+      try { ev = JSON.parse(raw.slice(5).trim()); } catch { continue; }
+      if (ev.type === 'delta' && typeof ev.text === 'string') onDelta(ev.text);
+      else if (ev.type === 'meta') onMeta(ev as AskResponse);
+    }
+  }
+}
+
 export async function health(): Promise<boolean> {
   try {
     const res = await fetch('/health');

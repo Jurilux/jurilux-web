@@ -228,6 +228,20 @@ footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .auth-form .send { margin-top: 4px; }
 .account-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .ok-msg { color: var(--green); font-weight: 600; margin-bottom: 14px; }
+
+/* ---------- V3 cabinet (tiroir + modale) ---------- */
+.back { display: inline-block; margin-bottom: 12px; font-size: 13px; }
+.cab-form { display: flex; gap: 8px; margin-top: 10px; }
+.cab-form input, .cab-form select, .auth-form select { flex: 1; padding: 8px 11px; border: 1px solid var(--border);
+  border-radius: 9px; font: inherit; font-size: 13.5px; background: var(--card); color: var(--text); }
+.cab-form input:focus, .auth-form select:focus { outline: none; border-color: var(--primary); }
+.cab-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-2); }
+.cab-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+.cab-items { display: flex; flex-direction: column; gap: 10px; }
+.cab-item { border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; background: var(--card-2); }
+.cab-item-q { font-size: 13.5px; font-weight: 600; }
+.cab-item-a { font-size: 12.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+.cab-item-meta { font-size: 11px; color: var(--muted-2); margin-top: 6px; font-family: var(--mono); }
 .switch { text-align: center; margin-top: 14px; font-size: 13px; }
 .linklike { background: none; border: none; color: var(--primary); cursor: pointer; font: inherit;
   padding: 0; text-decoration: underline; }

@@ -63,6 +63,10 @@ body {
 .side-signin:hover { border-color: var(--primary); color: var(--primary); }
 .side-legal { font-size: 11.5px; color: var(--muted-2); text-align: left; padding: 3px 6px; text-decoration: none; }
 .side-legal:hover { color: var(--primary); }
+.side-dot { margin-left: auto; }
+.pedago-filter { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text);
+  cursor: pointer; width: 100%; margin-top: 2px; }
+.pedago-filter input { accent-color: var(--primary); width: 15px; height: 15px; }
 
 /* ---------- espace de travail ---------- */
 .workspace { display: flex; flex-direction: column; min-width: 0; background: var(--paper); overflow: hidden; }

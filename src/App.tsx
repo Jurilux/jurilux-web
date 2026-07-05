@@ -542,6 +542,11 @@ export default function App() {
     const question = q.trim();
     if (!question || loading) return;
     const usedFilters = overrideFilters ?? filters;
+    // Contexte conversationnel : les tours précédents de la session (pour les questions de suivi).
+    const history = messages
+      .filter((m) => (m.role === 'user' || m.role === 'assistant') && !!m.content && !m.streaming && !m.error)
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.content }));
     setMessages((prev) => [...prev, { id: `u${Date.now()}`, role: 'user', content: question }]);
     setInput('');
     setLoading(true);
@@ -569,11 +574,11 @@ export default function App() {
     try {
       await askStream(question, 20, usedFilters, 0, pedagogical,
         (delta) => setMessages((prev) => prev.map((m) => m.id === aid ? { ...m, content: m.content + delta } : m)),
-        finalize);
+        finalize, history);
     } catch {
       // repli non-streamé si le flux échoue
       try {
-        finalize(await ask(question, 20, usedFilters, 0, pedagogical));
+        finalize(await ask(question, 20, usedFilters, 0, pedagogical, history));
       } catch (err) {
         setMessages((prev) => prev.map((m) => m.id === aid ? {
           ...m, streaming: false, error: err instanceof Error ? err.message : String(err),

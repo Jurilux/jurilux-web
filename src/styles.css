@@ -22,7 +22,7 @@ body {
 }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
 
-.app { display: flex; flex-direction: column; height: 100vh; max-width: 1120px; margin: 0 auto; }
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 1120px; margin: 0 auto; }
 
 /* ---------- header ---------- */
 header {
@@ -190,8 +190,11 @@ main { flex: 1; overflow-y: auto; padding: 8px clamp(12px, 4vw, 24px); }
 .citation-actions a:hover { text-decoration: underline; }
 
 /* ---------- composer (footer) ---------- */
-footer { position: sticky; bottom: 0; padding: 6px clamp(12px, 4vw, 24px) 14px;
-  background: linear-gradient(transparent, var(--bg) 26%); }
+/* Fond OPAQUE + hairline : le contenu de la liste ne transparaît jamais derrière la barre
+   de saisie (corrige le chevauchement mobile). Safe-area pour l'encoche/barre du bas iOS. */
+footer { position: sticky; bottom: 0; z-index: 5;
+  padding: 10px clamp(12px, 4vw, 24px) max(14px, env(safe-area-inset-bottom));
+  background: var(--bg); border-top: 1px solid var(--border); }
 footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap;
   padding: 12px 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px;
@@ -284,6 +287,32 @@ footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
   .bubble.assistant { padding: 12px 15px 14px; }
   .sources { margin: 12px -15px -14px; padding: 14px 15px; }
   .answer, .bubble.user { font-size: 14.5px; }
+
+  /* Accueil : on remonte le contenu (10vh gaspillait un écran) et on compacte. */
+  main { padding: 4px 10px; }
+  .thread, .welcome { padding: 14px 2px; }
+  .welcome { padding-top: 4vh; }
+  .welcome h1 { font-size: 1.65rem; margin-bottom: 8px; }
+  .welcome > .muted { font-size: 14px; line-height: 1.55; }
+  .corpus-scope { font-size: 12px; margin-top: 12px; }
+  .presets { margin-top: 22px; gap: 16px; }
+  .presets button { padding: 12px 14px; font-size: 14.5px; line-height: 1.35; box-shadow: none; }
+
+  /* Composer : saisie confortable, boutons compacts, plus de chevauchement. */
+  .pedago-toggle { margin-bottom: 8px; }
+  .input-row { padding: 5px 6px 5px 14px; border-radius: 14px; gap: 6px; }
+  .input-row textarea { font-size: 16px; padding: 8px 0; }  /* 16px = pas de zoom auto iOS */
+  button.send { padding: 11px 15px; }
+  .filter-toggle { width: 40px; height: 40px; }
+  .hint { font-size: 10.5px; margin-top: 8px; }
+  .version { display: block; margin: 3px 0 0; }
+
+  /* Réponses : la rangée d'actions passe à la ligne au lieu de déborder ; zones tactiles + grandes. */
+  .bubble-head { flex-wrap: wrap; row-gap: 6px; align-items: flex-start; }
+  .msg-actions { gap: 8px 14px; flex-wrap: wrap; }
+  .copy-btn { padding: 5px 2px; font-size: 12px; }
+  .account-btn { padding: 8px 12px; font-size: 13px; }
+  .chip, .pivot-btn { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

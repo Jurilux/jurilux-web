@@ -250,6 +250,14 @@ footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .dossier-del { border: 1px solid var(--border); background: var(--card); color: var(--muted-2);
   border-radius: 9px; padding: 0 12px; cursor: pointer; font-size: 13px; }
 .dossier-del:hover { border-color: var(--ko); color: var(--ko); }
+
+/* ---------- V3 alertes de veille ---------- */
+.alert-badge { display: inline-block; min-width: 18px; text-align: center; font-size: 10px; font-weight: 700;
+  background: var(--ko); color: #fff; border-radius: 999px; padding: 1px 6px; margin-right: 6px; letter-spacing: 0; }
+.alert-create select { flex: 0 0 auto; }
+.alert-link { font-size: 12.5px; color: var(--primary); text-decoration: none; margin-top: 6px; display: inline-block; }
+.alert-link:hover { text-decoration: underline; }
+.hit-new { background: var(--primary-soft); }
 .switch { text-align: center; margin-top: 14px; font-size: 13px; }
 .linklike { background: none; border: none; color: var(--primary); cursor: pointer; font: inherit;
   padding: 0; text-decoration: underline; }

@@ -134,6 +134,10 @@ function Dashboard({ ov }: { ov: AdminOverview }) {
           hint={`${fmtNum(m.ask_refused)} refus`} tone={refusalPct != null && refusalPct > 30 ? 'warn' : undefined} />
         <StatTile label="Latence moyenne" value={latency == null ? '—' : `${latency.toFixed(1)} s`}
           hint="200 dernières" tone={latency != null && latency > 10 ? 'warn' : undefined} />
+        <StatTile label="dont recherche" value={m.search_ms_avg == null ? '—' : `${(m.search_ms_avg / 1000).toFixed(1)} s`}
+          hint={latency && m.search_ms_avg ? `${Math.round(100 * (m.search_ms_avg / 1000) / latency)} % du total` : 'Meili + embedding'} />
+        <StatTile label="dont LLM" value={m.llm_ms_avg == null ? '—' : `${(m.llm_ms_avg / 1000).toFixed(1)} s`}
+          hint={latency && m.llm_ms_avg ? `${Math.round(100 * (m.llm_ms_avg / 1000) / latency)} % du total` : 'génération Claude'} />
         <StatTile label="Erreurs" value={fmtNum(m.ask_errors)}
           hint={`${fmtNum(m.ask_rate_limited)} rate-limited`} tone={m.ask_errors > 0 ? 'ko' : undefined} />
         <StatTile label="Comptes" value={fmtNum(ov.users.total)}

@@ -80,6 +80,8 @@ cat > /etc/caddy/Caddyfile <<'CADDY'
 	}
 	handle_path /docs/* {
 		root * /data/pdfs
+		header Cache-Control "public, max-age=2592000"
+		header Content-Disposition inline
 		file_server
 	}
 	handle {
@@ -104,6 +106,8 @@ jurilux.lu, www.jurilux.lu {
 	}
 	handle_path /docs/* {
 		root * /data/pdfs
+		header Cache-Control "public, max-age=2592000"
+		header Content-Disposition inline
 		file_server
 	}
 	handle {
@@ -128,6 +132,8 @@ dev.jurilux.lu {
 	}
 	handle_path /docs/* {
 		root * /data/pdfs
+		header Cache-Control "public, max-age=2592000"
+		header Content-Disposition inline
 		file_server
 	}
 	handle {

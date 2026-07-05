@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, Suspense, lazy, FormEvent } from 'react';
 import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
   getStoredEmail, listAlerts, createAlert, AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
+import { Onboarding, shouldOnboard } from './Onboarding';
 
 // Chargés à la demande (code splitting) : ces écrans ne pèsent pas sur le 1er rendu.
 const LegalPage = lazy(() => import('./Legal').then((m) => ({ default: m.LegalPage })));
@@ -506,6 +507,7 @@ export default function App() {
   }, []);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [onboarding, setOnboarding] = useState(shouldOnboard);
   const [legalOpen, setLegalOpen] = useState(false);
   const openLegal = () => { setMenuOpen(false); setLegalOpen(true); };
   const [pwOpen, setPwOpen] = useState(false);
@@ -798,6 +800,9 @@ export default function App() {
           </aside>
         </div>
       )}
+
+      {onboarding && <Onboarding onClose={() => setOnboarding(false)}
+        onSignup={() => { setOnboarding(false); setAuthOpen(true); }} />}
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
 

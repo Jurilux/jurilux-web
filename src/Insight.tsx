@@ -99,7 +99,7 @@ function InsightMain({ stats, onLogout }: {
         </div>
 
         {sel ? (
-          <Profile p={sel} onBack={() => setSel(null)} />
+          <Profile p={sel} onBack={() => setSel(null)} onOpen={(k) => insightLawyer(k).then(setSel)} />
         ) : (
           <>
             {stats && (
@@ -144,7 +144,7 @@ function InsightMain({ stats, onLogout }: {
   );
 }
 
-function Profile({ p, onBack }: { p: InsightProfile; onBack: () => void }) {
+function Profile({ p, onBack, onOpen }: { p: InsightProfile; onBack: () => void; onOpen: (key: string) => void }) {
   // Répartitions dérivées des doc_id (plus fiables que la clé juridiction, souvent nulle).
   const jc: Record<string, number> = {};
   const yc: Record<number, number> = {};
@@ -157,6 +157,7 @@ function Profile({ p, onBack }: { p: InsightProfile; onBack: () => void }) {
   const yrs = Object.keys(yc).map(Number).sort((a, b) => a - b);
   const yMax = Math.max(1, ...Object.values(yc));
   const allYears = yrs.length ? Array.from({ length: yrs[yrs.length - 1] - yrs[0] + 1 }, (_, i) => yrs[0] + i) : [];
+  const winPct = p.decided > 0 ? Math.round((p.won / p.decided) * 100) : null;
 
   return (
     <div className="insight-profile">
@@ -166,7 +167,48 @@ function Profile({ p, onBack }: { p: InsightProfile; onBack: () => void }) {
         <div className="stat-tile"><div className="stat-label">décisions</div><div className="stat-value">{p.cases_count}</div></div>
         <div className="stat-tile"><div className="stat-label">période</div><div className="stat-value">{yearsSpan(p.first_year, p.last_year)}</div></div>
         <div className="stat-tile"><div className="stat-label">juridictions</div><div className="stat-value">{courts.length}</div></div>
+        <div className="stat-tile"><div className="stat-label">issue estimée<sup>*</sup></div>
+          <div className="stat-value">{winPct == null ? '—' : `${winPct}%`}</div></div>
       </div>
+
+      {(p.as_demandeur > 0 || p.as_defendeur > 0) && (
+        <p className="insight-positions muted">
+          Positions : <b>{p.as_demandeur}</b> fois côté demandeur/appelant ·
+          {' '}<b>{p.as_defendeur}</b> fois côté défendeur/intimé
+        </p>
+      )}
+
+      <h3>Issue estimée <span className="est-tag" title="Estimation heuristique à partir du dispositif — indicative, jamais certaine (gains partiels, renvois…).">indicatif</span></h3>
+      {p.decided > 0 ? (
+        <>
+          <div className="wl-bar" aria-hidden="true">
+            <span className="wl-won" style={{ width: `${(p.won / p.decided) * 100}%` }} />
+            <span className="wl-lost" style={{ width: `${(p.lost / p.decided) * 100}%` }} />
+          </div>
+          <p className="muted wl-legend">
+            <b className="wl-dot-won" /> {p.won} estimée{p.won > 1 ? 's' : ''} favorable{p.won > 1 ? 's' : ''} ·
+            {' '}<b className="wl-dot-lost" /> {p.lost} défavorable{p.lost > 1 ? 's' : ''}
+            {' '}— sur {p.decided} décision{p.decided > 1 ? 's' : ''} à issue estimable (/{p.cases_count}).
+            {' '}<i>Estimation heuristique, indicative.</i>
+          </p>
+        </>
+      ) : (
+        <p className="muted">Issue non estimable sur ces décisions (dispositif non concluant).</p>
+      )}
+
+      {p.cocounsel.length > 0 && (
+        <>
+          <h3>Confrères récurrents</h3>
+          <div className="insight-chips">
+            {p.cocounsel.map((cc) => (
+              <button key={cc.name_key} className={`cochip rel-${cc.relation}`} onClick={() => onOpen(cc.name_key)}
+                title={`${cc.count} affaire(s) en commun · ${cc.relation}`}>
+                {cc.name} <span className="cochip-n">{cc.count}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {allYears.length > 1 && (
         <>
@@ -200,6 +242,9 @@ function CaseRow({ c }: { c: InsightCase }) {
   return (
     <a className="case-row" href={`/docs/${c.doc_id}.pdf`} target="_blank" rel="noopener noreferrer">
       <span className="case-court">{jurisCourt(c.doc_id, c.juridiction_key)}</span>
+      {c.side && <span className={`case-side side-${c.side}`}>{c.side === 'A' ? 'demandeur' : 'défendeur'}</span>}
+      {c.won === 1 && <span className="case-out out-won" title="issue estimée favorable">✓</span>}
+      {c.won === 0 && <span className="case-out out-lost" title="issue estimée défavorable">✗</span>}
       <span className="case-meta muted">{meta}</span>
       <span className="case-open">PDF ↗</span>
     </a>

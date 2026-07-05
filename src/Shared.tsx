@@ -12,16 +12,16 @@ export function SharedView({ id }: { id: string }) {
   }, [id]);
 
   return (
-    <div className="app">
-      <header>
+    <div className="shared-app">
+      <header className="shared-head">
         <a className="brand-btn" href="/"><span className="logo">⚖</span><strong>Jurilux</strong></a>
-        <span className="muted status-txt">Réponse partagée</span>
+        <span className="muted">Réponse partagée</span>
         <div className="header-actions">
           <a className="send account-btn" href="/">Poser ma question</a>
         </div>
       </header>
 
-      <main>
+      <main className="shared-main">
         <div className="thread shared-thread">
           {data === 'loading' && <p className="muted">Chargement…</p>}
           {data === 'notfound' && <p className="warn">⚠ Ce lien est introuvable ou a expiré.</p>}

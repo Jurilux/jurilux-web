@@ -714,14 +714,12 @@ export default function App() {
                 <p className="hero-disclaimer">Les réponses ne constituent pas un avis juridique.</p>
               </section>
               <section className="suggest">
-                {PRESET_GROUPS.map((g) => (
-                  <div className="preset-group" key={g.theme}>
-                    <div className="preset-theme">{g.theme}</div>
-                    {g.questions.map((p, i) => (
-                      <button key={i} onClick={() => submit(p)} disabled={loading}>{p}</button>
-                    ))}
-                  </div>
-                ))}
+                <div className="suggest-label">Exemples de questions</div>
+                <div className="suggest-list">
+                  {PRESET_GROUPS.map((g) => g.questions[0]).filter(Boolean).map((p, i) => (
+                    <button key={i} className="sugg" onClick={() => submit(p)} disabled={loading}>{p}</button>
+                  ))}
+                </div>
               </section>
             </div>
           </div>

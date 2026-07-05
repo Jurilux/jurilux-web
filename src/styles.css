@@ -6,8 +6,8 @@
   --text: #1c1b18; --muted: #6e6b64; --muted-2: #9c988f;
   --border: #e2ded4; --border-2: #efece4;
   /* accent unique : oxblood/bordeaux — tradition juridique, dépensé avec parcimonie */
-  --primary: #7c2d3a; --primary-700: #5e2029; --primary-soft: #f3e7e8;
-  --accent: #7c2d3a;
+  --primary: #17365c; --primary-700: #0f2543; --primary-soft: #e7edf5;
+  --accent: #17365c;
   --ink: #1c1b18; --on-dark: #f3f2ec;
   --amber: #9a6a1e; --amber-soft: #f6eedd;   /* loi */
   --green: #3a6f4e; --green-soft: #e7f0e9;    /* projet de loi */
@@ -39,7 +39,7 @@ body {
 .side-loc { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-2); align-self: center; }
 .side-cta { display: flex; align-items: center; gap: 9px; width: 100%; margin-bottom: 8px; padding: 11px 14px;
   border: none; border-radius: 10px; cursor: pointer; background: var(--accent); color: #fff; font: inherit;
-  font-size: 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(124,45,58,.25); transition: background .15s; }
+  font-size: 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(23,54,92,.28); transition: background .15s; }
 .side-cta:hover { background: var(--primary-700); }
 .side-cta .plus { font-size: 17px; line-height: 0; margin-top: -1px; }
 .side-label { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-2); padding: 12px 10px 5px; }

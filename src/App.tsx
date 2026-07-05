@@ -610,10 +610,12 @@ export default function App() {
       <main>
         {messages.length === 0 ? (
           <div className="welcome">
+            <div className="hero-kicker">Recherche juridique · Grand-Duché de Luxembourg</div>
             <h1>Assistant juridique Jurilux</h1>
-            <p className="muted">
-              Posez vos questions en langage naturel. Les réponses sont fondées sur la jurisprudence et la
-              législation luxembourgeoises, avec sources vérifiables.
+            <div className="hero-rule" aria-hidden="true" />
+            <p className="hero-lead">
+              Posez vos questions en langage naturel. Chaque réponse est fondée sur la jurisprudence et la
+              législation luxembourgeoises, avec des <b>sources vérifiables</b>.
             </p>
             {corpusInfo && corpusInfo.decisions != null && (
               <p className="corpus-scope">

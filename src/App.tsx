@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { ask, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
-  getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
+  getStoredEmail, listAlerts, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
 import { Cabinet, SaveToDossierModal } from './Cabinet';
+import { Alerts } from './Alerts';
 
 interface Message {
   id: string;
@@ -478,6 +479,11 @@ export default function App() {
   const [cabOpen, setCabOpen] = useState(false);
   const openCabinet = () => { setMenuOpen(false); setCabOpen(true); };
   const [saveItem, setSaveItem] = useState<Message | null>(null);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const openAlerts = () => { setMenuOpen(false); setAlertsOpen(true); };
+  const [alertUnseen, setAlertUnseen] = useState(0);
+  const refreshAlerts = () => { if (getStoredEmail()) listAlerts().then((a) => setAlertUnseen(a.reduce((n, x) => n + x.unseen, 0))).catch(() => {}); };
+  useEffect(refreshAlerts, []);
 
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
   const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
@@ -681,6 +687,7 @@ export default function App() {
               <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
               {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
               {user && <button className="nav-item" onClick={openCabinet}>🗂️ Mon cabinet <span className="muted">— dossiers partagés</span></button>}
+              {user && <button className="nav-item" onClick={openAlerts}>🔔 Mes alertes {alertUnseen > 0 && <span className="alert-badge">{alertUnseen}</span>} <span className="muted">— veille</span></button>}
               {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
               <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
@@ -725,6 +732,8 @@ export default function App() {
       {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
 
       {cabOpen && <Cabinet onClose={() => setCabOpen(false)} />}
+
+      {alertsOpen && <Alerts onClose={() => { setAlertsOpen(false); refreshAlerts(); }} />}
 
       {saveItem && <SaveToDossierModal onClose={() => setSaveItem(null)} item={{
         question: saveItem.question || '', answer: saveItem.content || null,

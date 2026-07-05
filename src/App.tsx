@@ -728,6 +728,7 @@ export default function App() {
               {user && <button className="nav-item" onClick={openCabinet}>🗂️ Mon cabinet <span className="muted">— dossiers partagés</span></button>}
               {user && <button className="nav-item" onClick={openAlerts}>🔔 Mes alertes {alertUnseen > 0 && <span className="alert-badge">{alertUnseen}</span>} <span className="muted">— veille</span></button>}
               {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
+              {account?.is_admin && <a className="nav-item nav-admin" href="/insight">⚖️ Insight <span className="muted">— avocats</span></a>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
               <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
             </nav>

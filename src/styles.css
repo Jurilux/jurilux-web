@@ -352,6 +352,25 @@ a.nav-item { display: block; text-decoration: none; }
 .plan-student { background: var(--primary-soft); color: var(--primary); }
 .plan-pro { background: var(--green-soft); color: var(--green); }
 
+/* ---------- Insight (profiling avocats) ---------- */
+.insight { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; max-width: 1120px; margin: 0 auto; }
+.insight-note { background: var(--amber-soft); border: 1px solid #ecdcbf; border-radius: 10px;
+  padding: 12px 15px; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
+.insight-stats { margin-bottom: 12px; }
+.insight-search { width: 100%; max-width: 420px; padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: 10px; font: inherit; font-size: 16px; background: var(--card); color: var(--text); margin-bottom: 14px; }
+.insight-search:focus { outline: none; border-color: var(--primary); }
+.insight-row { cursor: pointer; transition: .12s; }
+.insight-row:hover { background: var(--primary-soft); }
+.insight-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 6px; }
+.insight-profile h2 { font-family: var(--serif); margin: 6px 0 14px; }
+.insight-profile h3 { font-family: var(--serif); font-size: 1.05rem; color: var(--primary); margin: 20px 0 8px; }
+.insight .back { display: inline-block; margin-bottom: 10px; font-size: 13px; }
+.insight-foot { padding: 14px clamp(16px,4vw,32px); font-size: 12px; text-align: center;
+  color: var(--muted-2); border-top: 1px solid var(--chrome-line); background: var(--chrome); }
+.mono-cell { font-family: var(--mono); font-size: 12px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
 @media (max-width: 640px) { .status-txt { display: none; } }
 
 /* ================= Backoffice /admin ================= */

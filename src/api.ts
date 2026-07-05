@@ -403,6 +403,22 @@ export interface AdminQuestion {
   status: string | null; answer_preview: string | null; created_at: string;
 }
 
+// Insight — profiling avocats (gate admin)
+export interface InsightLawyer {
+  name_key: string; name: string; cases: number; first_year: number | null; last_year: number | null;
+}
+export interface InsightCase { display_name: string; doc_id: string; year: number | null; juridiction_key: string | null; }
+export interface InsightProfile {
+  name_key: string; name: string; cases_count: number; first_year: number | null; last_year: number | null;
+  jurisdictions: { key: string; count: number }[]; cases: InsightCase[];
+}
+export const insightStats = () => adminGet<{ lawyers: number; appearances: number }>('/api/insight/stats');
+export const insightLawyers = (q = '', limit = 50) =>
+  adminGet<{ items: InsightLawyer[] }>(
+    `/api/insight/lawyers?limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ''}`).then((d) => d.items);
+export const insightLawyer = (key: string) =>
+  adminGet<InsightProfile>(`/api/insight/lawyers/${encodeURIComponent(key)}`);
+
 export const adminOverview = () => adminGet<AdminOverview>('/api/admin/overview');
 export const adminUsers = () => adminGet<{ items: AdminUser[] }>('/api/admin/users').then((d) => d.items);
 export const adminQuestions = (limit = 100) =>

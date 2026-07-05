@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState, FormEvent } from 'react';
+import { useEffect, useRef, useState, Suspense, lazy, FormEvent } from 'react';
 import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
   getStoredEmail, listAlerts, createAlert, AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
-import { LegalPage } from './Legal';
-import { Cabinet, SaveToDossierModal } from './Cabinet';
-import { Alerts } from './Alerts';
+
+// Chargés à la demande (code splitting) : ces écrans ne pèsent pas sur le 1er rendu.
+const LegalPage = lazy(() => import('./Legal').then((m) => ({ default: m.LegalPage })));
+const Cabinet = lazy(() => import('./Cabinet').then((m) => ({ default: m.Cabinet })));
+const SaveToDossierModal = lazy(() => import('./Cabinet').then((m) => ({ default: m.SaveToDossierModal })));
+const Alerts = lazy(() => import('./Alerts').then((m) => ({ default: m.Alerts })));
 
 interface Message {
   id: string;
@@ -763,18 +766,17 @@ export default function App() {
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuth={onAuth} />}
 
-      {legalOpen && <LegalPage onClose={() => setLegalOpen(false)} />}
-
       {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
 
-      {cabOpen && <Cabinet onClose={() => setCabOpen(false)} />}
-
-      {alertsOpen && <Alerts onClose={() => { setAlertsOpen(false); refreshAlerts(); }} />}
-
-      {saveItem && <SaveToDossierModal onClose={() => setSaveItem(null)} item={{
-        question: saveItem.question || '', answer: saveItem.content || null,
-        citations: saveItem.citations || [], status: saveItem.status,
-      }} />}
+      <Suspense fallback={null}>
+        {legalOpen && <LegalPage onClose={() => setLegalOpen(false)} />}
+        {cabOpen && <Cabinet onClose={() => setCabOpen(false)} />}
+        {alertsOpen && <Alerts onClose={() => { setAlertsOpen(false); refreshAlerts(); }} />}
+        {saveItem && <SaveToDossierModal onClose={() => setSaveItem(null)} item={{
+          question: saveItem.question || '', answer: saveItem.content || null,
+          citations: saveItem.citations || [], status: saveItem.status,
+        }} />}
+      </Suspense>
 
       {histOpen && (
         <div className="drawer-overlay" onClick={() => setHistOpen(false)}>

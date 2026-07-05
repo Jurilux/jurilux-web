@@ -685,12 +685,7 @@ export default function App() {
           <div className="content">
             <div className="inner welcome">
               <section className="hero">
-                <div className="hero-kicker">Recherche juridique · Grand-Duché de Luxembourg</div>
                 <h1>Quelle question de droit&nbsp;?</h1>
-                <p className="hero-lead">
-                  Posez-la en langage naturel. Chaque réponse est fondée sur la jurisprudence et la
-                  législation luxembourgeoises, avec des <b>sources vérifiables</b>.
-                </p>
                 <div className="search-hero">
                   <textarea ref={inputRef} value={input} rows={1}
                     placeholder="Posez votre question juridique…"
@@ -703,15 +698,6 @@ export default function App() {
                   </div>
                 </div>
                 {filtersPanel}
-                {corpusInfo && corpusInfo.decisions != null && (
-                  <p className="corpus-scope">
-                    <b>{corpusInfo.decisions.toLocaleString('fr-FR')}</b> décisions
-                    {corpusInfo.texts != null && <> · <b>{corpusInfo.texts.toLocaleString('fr-FR')}</b> textes de loi</>}
-                    {corpusInfo.projets != null && <> · <b>{corpusInfo.projets.toLocaleString('fr-FR')}</b> projets</>}
-                    {corpusInfo.updated && <> · à jour au {corpusInfo.updated.split('-').reverse().join('/')}</>}
-                  </p>
-                )}
-                <p className="hero-disclaimer">Les réponses ne constituent pas un avis juridique.</p>
               </section>
               <section className="suggest">
                 <div className="suggest-label">Exemples de questions</div>

@@ -33,11 +33,12 @@ const PRESET_GROUPS: { theme: string; questions: string[] }[] = [
     'Le bailleur peut-il conserver la garantie locative après le départ du locataire ?',
   ] },
   { theme: 'Preuve & procédure', questions: [
-    'Quelle valeur probante les tribunaux reconnaissent-ils aux échanges d’emails ?',
     "Quel est le délai pour faire appel d'un jugement civil ?",
+    'Quel est le délai de prescription d’une créance civile au Luxembourg ?',
   ] },
   { theme: 'Famille', questions: [
-    'Comment est fixée la pension alimentaire pour un enfant au Luxembourg ?',
+    "Sur quels critères le juge attribue-t-il la garde d'un enfant ?",
+    'Comment est organisée l’autorité parentale après une séparation ?',
   ] },
 ];
 

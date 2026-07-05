@@ -1,0 +1,238 @@
+import { useEffect, useState, FormEvent } from 'react';
+import {
+  listWorkspaces, createWorkspace, listMembers, addMember, listDossiers, createDossier,
+  listDossierItems, addDossierItem, Workspace, Member, Dossier, DossierItem, Citation,
+} from './api';
+
+// Modale « Enregistrer dans un dossier » : range une réponse sourcée dans un dossier partagé.
+export function SaveToDossierModal({ item, onClose }: {
+  item: { question: string; answer: string | null; citations: Citation[]; status?: string };
+  onClose: () => void;
+}) {
+  const [spaces, setSpaces] = useState<Workspace[] | null>(null);
+  const [wid, setWid] = useState<number | null>(null);
+  const [dossiers, setDossiers] = useState<Dossier[] | null>(null);
+  const [newName, setNewName] = useState('');
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    listWorkspaces().then((s) => { setSpaces(s); if (s.length) setWid(s[0].id); }).catch(() => setSpaces([]));
+  }, []);
+  useEffect(() => { if (wid) listDossiers(wid).then(setDossiers).catch(() => setDossiers([])); }, [wid]);
+
+  const save = async (did: number) => {
+    setBusy(true); setErr(null);
+    try {
+      await addDossierItem(did, item.question, item.answer, item.citations, item.status);
+      setDone(true);
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Échec'); } finally { setBusy(false); }
+  };
+  const saveNew = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!wid || !newName.trim()) return;
+    setBusy(true);
+    try { const d = await createDossier(wid, newName.trim()); await save(d.id); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>Enregistrer dans un dossier</h2>
+          <button className="ghost close" onClick={onClose} aria-label="Fermer">✕</button></div>
+        {done ? (
+          <><p className="ok-msg">✓ Réponse rangée dans le dossier.</p>
+            <button className="send" onClick={onClose}>Fermer</button></>
+        ) : spaces && spaces.length === 0 ? (
+          <p className="muted">Créez d'abord un cabinet (menu « Mon cabinet »).</p>
+        ) : (
+          <div className="auth-form">
+            <label>Cabinet
+              <select value={wid ?? ''} onChange={(e) => setWid(Number(e.target.value))}>
+                {(spaces || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </label>
+            <div className="nav-label">Choisir un dossier</div>
+            {!dossiers ? <p className="muted small">…</p> : dossiers.map((d) => (
+              <button key={d.id} className="hist-item" disabled={busy} onClick={() => save(d.id)}>
+                <span className="hist-q">{d.name}</span><span className="hist-meta">{d.items} réponse{d.items > 1 ? 's' : ''}</span>
+              </button>
+            ))}
+            <form onSubmit={saveNew} className="cab-form">
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="…ou nouveau dossier" />
+              <button className="ghost" type="submit" disabled={busy || !newName.trim()}>Créer &amp; ranger</button>
+            </form>
+            {err && <p className="warn small">⚠ {err}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Tiroir « Mon cabinet » (V3) : espaces de travail, membres/rôles, dossiers de recherche partagés.
+
+// Tiroir « Mon cabinet » (V3) : espaces de travail, membres/rôles, dossiers de recherche partagés.
+export function Cabinet({ onClose }: { onClose: () => void }) {
+  const [spaces, setSpaces] = useState<Workspace[] | null>(null);
+  const [sel, setSel] = useState<Workspace | null>(null);
+  const [dossier, setDossier] = useState<Dossier | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSpaces = () => listWorkspaces().then(setSpaces).catch((e) => setError(e.message));
+  useEffect(() => { loadSpaces(); }, []);
+
+  return (
+    <div className="drawer-overlay" onClick={onClose}>
+      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer-head">
+          <h2>{dossier ? dossier.name : sel ? sel.name : 'Mon cabinet'}</h2>
+          <button className="ghost close" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        {error && <p className="warn">⚠ {error}</p>}
+
+        {dossier && sel ? (
+          <DossierView dossier={dossier} onBack={() => setDossier(null)} />
+        ) : sel ? (
+          <WorkspaceView ws={sel} onBack={() => { setSel(null); loadSpaces(); }}
+            onOpenDossier={setDossier} />
+        ) : (
+          <SpacesList spaces={spaces} onCreated={loadSpaces} onOpen={setSel} />
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function SpacesList({ spaces, onCreated, onOpen }:
+  { spaces: Workspace[] | null; onCreated: () => void; onOpen: (w: Workspace) => void }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const create = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    try { await createWorkspace(name.trim()); setName(''); onCreated(); } finally { setBusy(false); }
+  };
+  return (
+    <>
+      <p className="muted small">Regroupez vos recherches par cabinet et partagez des dossiers avec votre équipe.</p>
+      {!spaces ? <p className="muted">Chargement…</p> : spaces.length === 0 ? (
+        <p className="muted small">Aucun cabinet pour l'instant. Créez-en un ci-dessous.</p>
+      ) : (
+        <ul className="hist-list">
+          {spaces.map((w) => (
+            <li key={w.id}>
+              <button className="hist-item" onClick={() => onOpen(w)}>
+                <span className="hist-q">{w.name}</span>
+                <span className="hist-meta">{w.role} · {w.members} membre{w.members > 1 ? 's' : ''}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={create} className="cab-form">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du cabinet" />
+        <button className="send" type="submit" disabled={busy || !name.trim()}>Créer</button>
+      </form>
+    </>
+  );
+}
+
+function WorkspaceView({ ws, onBack, onOpenDossier }:
+  { ws: Workspace; onBack: () => void; onOpenDossier: (d: Dossier) => void }) {
+  const [members, setMembers] = useState<Member[] | null>(null);
+  const [dossiers, setDossiers] = useState<Dossier[] | null>(null);
+  const [email, setEmail] = useState('');
+  const [dname, setDname] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const canAdmin = ws.role === 'owner' || ws.role === 'admin';
+
+  const load = () => {
+    listMembers(ws.id).then(setMembers).catch(() => setMembers([]));
+    listDossiers(ws.id).then(setDossiers).catch(() => setDossiers([]));
+  };
+  useEffect(load, [ws.id]);
+
+  const invite = async (e: FormEvent) => {
+    e.preventDefault(); setMsg(null);
+    try { await addMember(ws.id, email.trim()); setEmail(''); load(); }
+    catch (err) { setMsg(err instanceof Error ? err.message : 'Échec'); }
+  };
+  const mkDossier = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!dname.trim()) return;
+    await createDossier(ws.id, dname.trim()); setDname(''); load();
+  };
+
+  return (
+    <>
+      <button className="linklike back" onClick={onBack}>← Mes cabinets</button>
+
+      <div className="cab-section">
+        <div className="nav-label">Membres</div>
+        {!members ? <p className="muted small">…</p> : members.map((m) => (
+          <div className="cab-row" key={m.user_id}>
+            <span className="mono">{m.email}</span>
+            <span className={`plan-badge plan-${m.role === 'member' ? 'student' : 'pro'}`}>{m.role}</span>
+          </div>
+        ))}
+        {canAdmin && (
+          <form onSubmit={invite} className="cab-form">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="email d'un membre inscrit" />
+            <button className="ghost" type="submit">Inviter</button>
+          </form>
+        )}
+        {msg && <p className="warn small">⚠ {msg}</p>}
+      </div>
+
+      <div className="cab-section">
+        <div className="nav-label">Dossiers de recherche</div>
+        {!dossiers ? <p className="muted small">…</p> : dossiers.length === 0 ? (
+          <p className="muted small">Aucun dossier. Créez-en un pour y ranger des réponses.</p>
+        ) : (
+          <ul className="hist-list">
+            {dossiers.map((d) => (
+              <li key={d.id}>
+                <button className="hist-item" onClick={() => onOpenDossier(d)}>
+                  <span className="hist-q">{d.name}</span>
+                  <span className="hist-meta">{d.items} réponse{d.items > 1 ? 's' : ''}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form onSubmit={mkDossier} className="cab-form">
+          <input value={dname} onChange={(e) => setDname(e.target.value)} placeholder="Nouveau dossier (ex. Affaire Durand)" />
+          <button className="ghost" type="submit">Créer</button>
+        </form>
+      </div>
+    </>
+  );
+}
+
+function DossierView({ dossier, onBack }: { dossier: Dossier; onBack: () => void }) {
+  const [items, setItems] = useState<DossierItem[] | null>(null);
+  useEffect(() => { listDossierItems(dossier.id).then(setItems).catch(() => setItems([])); }, [dossier.id]);
+  return (
+    <>
+      <button className="linklike back" onClick={onBack}>← Dossiers</button>
+      {!items ? <p className="muted">Chargement…</p> : items.length === 0 ? (
+        <p className="muted small">Ce dossier est vide. Depuis une réponse, utilisez « Enregistrer » pour l'y ranger.</p>
+      ) : (
+        <div className="cab-items">
+          {items.map((it) => (
+            <div className="cab-item" key={it.id}>
+              <div className="cab-item-q">{it.question}</div>
+              {it.answer && <div className="cab-item-a">{it.answer.replace(/[#*]/g, '').slice(0, 200)}…</div>}
+              <div className="cab-item-meta">{it.citations.length} source{it.citations.length > 1 ? 's' : ''}
+                {it.added_by && <> · {it.added_by}</>}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}

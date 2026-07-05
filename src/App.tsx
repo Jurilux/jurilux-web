@@ -693,12 +693,14 @@ export default function App() {
                 </p>
                 <div className="search-hero">
                   <textarea ref={inputRef} value={input} rows={1}
-                    placeholder="Ex. : un employeur peut-il imposer des heures supplémentaires ?"
+                    placeholder="Posez votre question juridique…"
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(input); } }} />
-                  <button className={`ghost filter-toggle ${activeFilters > 0 ? 'active' : ''}`} title="Filtres"
-                    onClick={() => setShowFilters(!showFilters)}>⚙{activeFilters > 0 ? ` ${activeFilters}` : ''}</button>
-                  <button className="go" disabled={!input.trim() || loading} onClick={() => submit(input)}>Rechercher</button>
+                  <div className="sh-actions">
+                    <button className={`ghost filter-toggle ${activeFilters > 0 ? 'active' : ''}`} title="Filtres"
+                      onClick={() => setShowFilters(!showFilters)}>⚙{activeFilters > 0 ? ` ${activeFilters}` : ''}</button>
+                    <button className="go" disabled={!input.trim() || loading} onClick={() => submit(input)}>Rechercher</button>
+                  </div>
                 </div>
                 {filtersPanel}
                 {corpusInfo && corpusInfo.decisions != null && (

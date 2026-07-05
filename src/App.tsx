@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
-import { ask, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
+import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
   getStoredEmail, listAlerts, createAlert, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
@@ -16,6 +16,7 @@ interface Message {
   status?: 'ok' | 'partial';
   feedback?: Feedback | null;
   suggested_question?: string | null;
+  streaming?: boolean;             // réponse en cours de streaming
   error?: string;
 }
 
@@ -289,15 +290,28 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
       </div>
     );
   }
+  if (m.streaming) {
+    return (
+      <div className="bubble assistant">
+        <div className="bubble-tag">Jurilux</div>
+        {m.content
+          ? <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, []) }} />
+          : <p className="typing">Recherche dans les sources…</p>}
+        <span className="stream-cursor" aria-hidden="true">▌</span>
+      </div>
+    );
+  }
   if (m.refused) {
     const pistes = !!(m.citations && m.citations.length > 0);
     return (
       <div className="bubble assistant">
         <div className="bubble-tag">Jurilux</div>
-        <p className="rebound-lead">
-          Je n'ai pas de réponse certaine sur ce point précis{pistes ? ", mais voici ce que j'ai trouvé de plus proche." : "."}
-        </p>
-        {m.feedback?.why && <p className="rebound-why">{m.feedback.why}</p>}
+        {m.content
+          ? <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, []) }} />
+          : <p className="rebound-lead">
+              Je n'ai pas de réponse certaine sur ce point précis{pistes ? ", mais voici ce que j'ai trouvé de plus proche." : "."}
+            </p>}
+        {!m.content && m.feedback?.why && <p className="rebound-why">{m.feedback.why}</p>}
         <RecoveryActions m={m} actions={actions} />
         {pistes && <Sources citations={m.citations!} label="Pistes proches" />}
         <FeedbackBar question={m.question || ''} status="refused" />
@@ -524,40 +538,46 @@ export default function App() {
   async function submit(q: string, overrideFilters?: SearchFilters) {
     const question = q.trim();
     if (!question || loading) return;
+    const usedFilters = overrideFilters ?? filters;
     setMessages((prev) => [...prev, { id: `u${Date.now()}`, role: 'user', content: question }]);
     setInput('');
     setLoading(true);
-    try {
-      const res = await ask(question, 20, overrideFilters ?? filters, 0, pedagogical);
-      if (user) me().then(setAccount);  // rafraîchit le quota
-      // Dédup : doc_id pour la jurisprudence, titre parsé pour les lois.
+    const aid = `a${Date.now()}`;
+    setMessages((prev) => [...prev, { id: aid, role: 'assistant', content: '', question, streaming: true }]);
+
+    // Dédup : doc_id pour la jurisprudence, titre parsé pour les lois.
+    const dedup = (cites: Citation[]) => {
       const seen = new Set<string>();
-      const citations = (res.citations || []).filter((c) => {
+      return (cites || []).filter((c) => {
         const key = c.source_type === 'law' ? `law:${lawTitle(c.title || c.doc_id)}` : c.doc_id;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
       });
-      setMessages((prev) => [...prev, {
-        id: `a${Date.now()}`,
-        role: 'assistant',
-        content: res.answer || '',
-        question,
-        citations,
-        refused: res.refused,
-        status: res.status,
-        feedback: res.feedback,
-        suggested_question: res.suggested_question,
-      }]);
-    } catch (err) {
-      setMessages((prev) => [...prev, {
-        id: `e${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        question,
-        error: err instanceof Error ? err.message : String(err),
-      }]);
+    };
+    const finalize = (meta: AskResponse) => setMessages((prev) => prev.map((m) => m.id === aid ? {
+      ...m, streaming: false,
+      content: meta.answer ?? m.content,
+      citations: dedup(meta.citations || []),
+      refused: meta.refused, status: meta.status,
+      feedback: meta.feedback, suggested_question: meta.suggested_question,
+    } : m));
+
+    try {
+      await askStream(question, 20, usedFilters, 0, pedagogical,
+        (delta) => setMessages((prev) => prev.map((m) => m.id === aid ? { ...m, content: m.content + delta } : m)),
+        finalize);
+    } catch {
+      // repli non-streamé si le flux échoue
+      try {
+        finalize(await ask(question, 20, usedFilters, 0, pedagogical));
+      } catch (err) {
+        setMessages((prev) => prev.map((m) => m.id === aid ? {
+          ...m, streaming: false, error: err instanceof Error ? err.message : String(err),
+        } : m));
+      }
     } finally {
+      if (user) me().then(setAccount);  // rafraîchit le quota
       setLoading(false);
     }
   }
@@ -627,7 +647,6 @@ export default function App() {
                 }} />
               ),
             )}
-            {loading && <div className="bubble assistant"><div className="bubble-tag">Jurilux</div><p className="typing">Recherche dans les sources…</p></div>}
             <div ref={endRef} />
           </div>
         )}

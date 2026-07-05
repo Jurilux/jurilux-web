@@ -275,6 +275,19 @@ export const addDossierItem = (did: number, question: string, answer: string | n
                                citations: Citation[], status?: string) =>
   wsSend<{ id: number }>(`/api/dossiers/${did}/items`, 'POST', { question, answer, citations, status });
 
+// ---------- V3 alertes de veille ----------
+export interface Alert { id: number; query: string; source_type: string | null; unseen: number; total: number; }
+export interface AlertHit {
+  id: number; doc_id: string; source_type: string | null; title: string | null;
+  year: number | null; juridiction_key: string | null; url: string | null; pdf_url: string | null; seen: number;
+}
+export const listAlerts = () => wsGet<{ items: Alert[] }>('/api/alerts').then((d) => d.items);
+export const createAlert = (query: string, source_type?: string) =>
+  wsSend<Alert>('/api/alerts', 'POST', { query, source_type });
+export const checkAlert = (id: number) => wsSend<{ new: number }>(`/api/alerts/${id}/check`, 'POST');
+export const alertHits = (id: number) => wsGet<{ items: AlertHit[] }>(`/api/alerts/${id}/hits`).then((d) => d.items);
+export const deleteAlert = (id: number) => wsSend<{ ok: boolean }>(`/api/alerts/${id}`, 'DELETE');
+
 export async function me(): Promise<Me | null> {
   try {
     const res = await fetch('/api/me', { headers: { ...authHeaders() } });

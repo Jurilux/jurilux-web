@@ -242,6 +242,14 @@ footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .cab-item-q { font-size: 13.5px; font-weight: 600; }
 .cab-item-a { font-size: 12.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
 .cab-item-meta { font-size: 11px; color: var(--muted-2); margin-top: 6px; font-family: var(--mono); }
+.ws-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.ws-danger { color: var(--ko); font-size: 12.5px; }
+.cab-row-actions { display: inline-flex; align-items: center; gap: 8px; }
+.dossier-li { display: flex; align-items: stretch; gap: 6px; }
+.dossier-li .hist-item { flex: 1; }
+.dossier-del { border: 1px solid var(--border); background: var(--card); color: var(--muted-2);
+  border-radius: 9px; padding: 0 12px; cursor: pointer; font-size: 13px; }
+.dossier-del:hover { border-color: var(--ko); color: var(--ko); }
 .switch { text-align: center; margin-top: 14px; font-size: 13px; }
 .linklike { background: none; border: none; color: var(--primary); cursor: pointer; font: inherit;
   padding: 0; text-decoration: underline; }

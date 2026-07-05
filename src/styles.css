@@ -258,6 +258,8 @@ footer > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .alert-link { font-size: 12.5px; color: var(--primary); text-decoration: none; margin-top: 6px; display: inline-block; }
 .alert-link:hover { text-decoration: underline; }
 .hit-new { background: var(--primary-soft); }
+.alert-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.alert-topbar button { flex: none; white-space: nowrap; font-size: 12px; }
 .switch { text-align: center; margin-top: 14px; font-size: 13px; }
 .linklike { background: none; border: none; color: var(--primary); cursor: pointer; font: inherit;
   padding: 0; text-decoration: underline; }

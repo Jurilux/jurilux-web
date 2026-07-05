@@ -407,10 +407,15 @@ export interface AdminQuestion {
 export interface InsightLawyer {
   name_key: string; name: string; cases: number; first_year: number | null; last_year: number | null;
 }
-export interface InsightCase { display_name: string; doc_id: string; year: number | null; juridiction_key: string | null; }
+export interface InsightCase {
+  display_name: string; doc_id: string; year: number | null; juridiction_key: string | null;
+  side?: string | null; won?: number | null;
+}
+export interface InsightCoCounsel { name_key: string; name: string; count: number; relation: string; }
 export interface InsightProfile {
   name_key: string; name: string; cases_count: number; first_year: number | null; last_year: number | null;
-  jurisdictions: { key: string; count: number }[]; cases: InsightCase[];
+  as_demandeur: number; as_defendeur: number; won: number; lost: number; decided: number;
+  cocounsel: InsightCoCounsel[]; cases: InsightCase[];
 }
 export const insightStats = () => adminGet<{ lawyers: number; appearances: number }>('/api/insight/stats');
 export const insightLawyers = (q = '', limit = 50) =>

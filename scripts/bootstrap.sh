@@ -84,6 +84,10 @@ cat > /etc/caddy/Caddyfile <<'CADDY'
 	}
 	handle {
 		root * /var/www/juriscope/prod/current
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html not path /assets/*
+		header @html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
@@ -104,6 +108,10 @@ jurilux.lu, www.jurilux.lu {
 	}
 	handle {
 		root * /var/www/juriscope/prod/current
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html not path /assets/*
+		header @html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
@@ -124,6 +132,10 @@ dev.jurilux.lu {
 	}
 	handle {
 		root * /var/www/juriscope/dev/current
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html not path /assets/*
+		header @html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

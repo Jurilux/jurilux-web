@@ -1,6 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
-  listWorkspaces, createWorkspace, listMembers, addMember, listDossiers, createDossier,
+  listWorkspaces, createWorkspace, listMembers, addMember, setMemberRole, removeMember,
+  deleteWorkspace, leaveWorkspace, listDossiers, createDossier, deleteDossier,
   listDossierItems, addDossierItem, Workspace, Member, Dossier, DossierItem, Citation,
 } from './api';
 
@@ -165,17 +166,51 @@ function WorkspaceView({ ws, onBack, onOpenDossier }:
     if (!dname.trim()) return;
     await createDossier(ws.id, dname.trim()); setDname(''); load();
   };
+  const changeRole = async (uid: number, role: string) => {
+    setMsg(null);
+    try { await setMemberRole(ws.id, uid, role); load(); }
+    catch (err) { setMsg(err instanceof Error ? err.message : 'Échec'); }
+  };
+  const kick = async (uid: number) => {
+    if (confirm('Retirer ce membre du cabinet ?')) { await removeMember(ws.id, uid); load(); }
+  };
+  const delDossier = async (id: number) => {
+    if (confirm('Supprimer ce dossier et tout son contenu ?')) { await deleteDossier(id); load(); }
+  };
+  const wsAction = async () => {
+    if (ws.role === 'owner') {
+      if (confirm('Supprimer définitivement ce cabinet (membres, dossiers, contenu) ?')) {
+        await deleteWorkspace(ws.id); onBack();
+      }
+    } else if (confirm('Quitter ce cabinet ?')) { await leaveWorkspace(ws.id); onBack(); }
+  };
 
   return (
     <>
-      <button className="linklike back" onClick={onBack}>← Mes cabinets</button>
+      <div className="ws-topbar">
+        <button className="linklike back" onClick={onBack}>← Mes cabinets</button>
+        <button className="linklike ws-danger" onClick={wsAction}>
+          {ws.role === 'owner' ? 'Supprimer le cabinet' : 'Quitter'}
+        </button>
+      </div>
 
       <div className="cab-section">
         <div className="nav-label">Membres</div>
         {!members ? <p className="muted small">…</p> : members.map((m) => (
           <div className="cab-row" key={m.user_id}>
             <span className="mono">{m.email}</span>
-            <span className={`plan-badge plan-${m.role === 'member' ? 'student' : 'pro'}`}>{m.role}</span>
+            {canAdmin && m.role !== 'owner' ? (
+              <span className="cab-row-actions">
+                <select className="cell-select" value={m.role}
+                  onChange={(e) => changeRole(m.user_id, e.target.value)}>
+                  <option value="member">membre</option>
+                  <option value="admin">admin</option>
+                </select>
+                <button className="row-del" onClick={() => kick(m.user_id)}>Retirer</button>
+              </span>
+            ) : (
+              <span className={`plan-badge plan-${m.role === 'member' ? 'student' : 'pro'}`}>{m.role}</span>
+            )}
           </div>
         ))}
         {canAdmin && (
@@ -195,11 +230,13 @@ function WorkspaceView({ ws, onBack, onOpenDossier }:
         ) : (
           <ul className="hist-list">
             {dossiers.map((d) => (
-              <li key={d.id}>
+              <li key={d.id} className="dossier-li">
                 <button className="hist-item" onClick={() => onOpenDossier(d)}>
                   <span className="hist-q">{d.name}</span>
                   <span className="hist-meta">{d.items} réponse{d.items > 1 ? 's' : ''}</span>
                 </button>
+                {canAdmin && <button className="dossier-del" title="Supprimer le dossier"
+                  onClick={() => delDossier(d.id)}>✕</button>}
               </li>
             ))}
           </ul>

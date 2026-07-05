@@ -3,6 +3,7 @@ import { ask, health, corpus, pdfHref, login, register, logout, changePassword, 
   getStoredEmail, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
+import { Cabinet, SaveToDossierModal } from './Cabinet';
 
 interface Message {
   id: string;
@@ -201,6 +202,8 @@ interface MsgActions {
   onAsk: (q: string) => void;          // soumet directement (question-pivot)
   onBroaden: (m: Message) => void;     // retire les filtres et relance la question
   hasFilters: boolean;
+  onSave: (m: Message) => void;        // ranger la réponse dans un dossier (cabinet)
+  canSave: boolean;                    // connecté ?
 }
 
 // Boucle de satisfaction : 👍/👎 puis, si 👎, « qu'est-ce qui manquait ? ».
@@ -294,6 +297,8 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
           <div className="msg-actions">
             <ShareButton m={m} />
             <ExportButton m={m} />
+            {actions.canSave && <button className="copy-btn" title="Ranger dans un dossier"
+              onClick={() => actions.onSave(m)}>Enregistrer</button>}
             <CopyButton text={m.content} />
           </div>
         )}
@@ -470,6 +475,9 @@ export default function App() {
   const openLegal = () => { setMenuOpen(false); setLegalOpen(true); };
   const [pwOpen, setPwOpen] = useState(false);
   const openPassword = () => { setMenuOpen(false); setPwOpen(true); };
+  const [cabOpen, setCabOpen] = useState(false);
+  const openCabinet = () => { setMenuOpen(false); setCabOpen(true); };
+  const [saveItem, setSaveItem] = useState<Message | null>(null);
 
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
   const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
@@ -591,6 +599,8 @@ export default function App() {
                   onAsk: (qq) => submit(qq),
                   onBroaden: (mm) => { setFilters({}); submit(mm.question || '', {}); },
                   hasFilters: activeFilters > 0,
+                  onSave: (mm) => setSaveItem(mm),
+                  canSave: !!user,
                 }} />
               ),
             )}
@@ -670,6 +680,7 @@ export default function App() {
             <nav className="nav-list">
               <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
               {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
+              {user && <button className="nav-item" onClick={openCabinet}>🗂️ Mon cabinet <span className="muted">— dossiers partagés</span></button>}
               {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
               <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
@@ -712,6 +723,13 @@ export default function App() {
       {legalOpen && <LegalPage onClose={() => setLegalOpen(false)} />}
 
       {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
+
+      {cabOpen && <Cabinet onClose={() => setCabOpen(false)} />}
+
+      {saveItem && <SaveToDossierModal onClose={() => setSaveItem(null)} item={{
+        question: saveItem.question || '', answer: saveItem.content || null,
+        citations: saveItem.citations || [], status: saveItem.status,
+      }} />}
 
       {histOpen && (
         <div className="drawer-overlay" onClick={() => setHistOpen(false)}>

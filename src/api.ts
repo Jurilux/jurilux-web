@@ -229,6 +229,44 @@ export async function getHistory(): Promise<HistoryItem[]> {
 export interface Quota { plan?: string; limit: number | null; used: number; remaining: number | null; }
 export interface Me { email: string; plan: string; is_admin: boolean; quota: Quota; }
 
+// ---------- V3 offre cabinet : espaces, membres, dossiers partagés ----------
+export interface Workspace { id: number; name: string; role: string; members: number; }
+export interface Member { user_id: number; email: string; role: string; created_at: string; }
+export interface Dossier { id: number; name: string; items: number; created_at?: string; }
+export interface DossierItem {
+  id: number; question: string; answer: string | null; citations: Citation[];
+  status: string | null; created_at: string; added_by: string | null;
+}
+
+async function wsGet<T>(path: string): Promise<T> {
+  const res = await fetch(path, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Erreur (HTTP ${res.status})`);
+  return (await res.json()) as T;
+}
+async function wsSend<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method, headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Erreur (HTTP ${res.status})`);
+  return (await res.json().catch(() => ({}))) as T;
+}
+
+export const listWorkspaces = () => wsGet<{ items: Workspace[] }>('/api/workspaces').then((d) => d.items);
+export const createWorkspace = (name: string) => wsSend<Workspace>('/api/workspaces', 'POST', { name });
+export const listMembers = (wid: number) => wsGet<{ items: Member[] }>(`/api/workspaces/${wid}/members`).then((d) => d.items);
+export const addMember = (wid: number, email: string, role = 'member') =>
+  wsSend<Member>(`/api/workspaces/${wid}/members`, 'POST', { email, role });
+export const removeMember = (wid: number, uid: number) =>
+  wsSend<{ ok: boolean }>(`/api/workspaces/${wid}/members/${uid}`, 'DELETE');
+export const listDossiers = (wid: number) => wsGet<{ items: Dossier[] }>(`/api/workspaces/${wid}/dossiers`).then((d) => d.items);
+export const createDossier = (wid: number, name: string) =>
+  wsSend<Dossier>(`/api/workspaces/${wid}/dossiers`, 'POST', { name });
+export const listDossierItems = (did: number) => wsGet<{ items: DossierItem[] }>(`/api/dossiers/${did}/items`).then((d) => d.items);
+export const addDossierItem = (did: number, question: string, answer: string | null,
+                               citations: Citation[], status?: string) =>
+  wsSend<{ id: number }>(`/api/dossiers/${did}/items`, 'POST', { question, answer, citations, status });
+
 export async function me(): Promise<Me | null> {
   try {
     const res = await fetch('/api/me', { headers: { ...authHeaders() } });

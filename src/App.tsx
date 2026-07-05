@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { ask, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
-  getStoredEmail, listAlerts, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
+  getStoredEmail, listAlerts, createAlert, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
 import { Cabinet, SaveToDossierModal } from './Cabinet';
@@ -93,6 +93,21 @@ function ExportButton({ m }: { m: Message }) {
   return (
     <button className="copy-btn" onClick={download} title="Télécharger la réponse et ses sources (.md)">
       Exporter
+    </button>
+  );
+}
+
+function FollowButton({ m }: { m: Message }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
+  const follow = async () => {
+    setState('busy');
+    try { await createAlert(m.question || ''); setState('done'); setTimeout(() => setState('idle'), 2500); }
+    catch { setState('err'); setTimeout(() => setState('idle'), 2500); }
+  };
+  return (
+    <button className="copy-btn" onClick={follow} disabled={state === 'busy'}
+      title="Être alerté des nouvelles décisions sur ce sujet">
+      {state === 'done' ? '✓ Sujet suivi' : state === 'busy' ? '…' : state === 'err' ? 'Échec' : '🔔 Suivre'}
     </button>
   );
 }
@@ -300,6 +315,7 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
             <ExportButton m={m} />
             {actions.canSave && <button className="copy-btn" title="Ranger dans un dossier"
               onClick={() => actions.onSave(m)}>Enregistrer</button>}
+            {actions.canSave && <FollowButton m={m} />}
             <CopyButton text={m.content} />
           </div>
         )}

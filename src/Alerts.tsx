@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react';
-import { listAlerts, createAlert, checkAlert, alertHits, deleteAlert, Alert, AlertHit } from './api';
+import { listAlerts, createAlert, checkAlert, checkAllAlerts, alertHits, deleteAlert, Alert, AlertHit } from './api';
 
 const SOURCE_LABEL: Record<string, string> = {
   jurisprudence: 'Jurisprudence', law: 'Textes de loi', projet_loi: 'Projets de loi',
@@ -40,7 +40,12 @@ function AlertsList({ alerts, onCreated, onOpen }:
   const [query, setQuery] = useState('');
   const [src, setSrc] = useState('');
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
 
+  const checkAll = async () => {
+    setChecking(true);
+    try { await checkAllAlerts(); onCreated(); } finally { setChecking(false); }
+  };
   const create = async (e: FormEvent) => {
     e.preventDefault();
     if (query.trim().length < 2) return;
@@ -51,8 +56,13 @@ function AlertsList({ alerts, onCreated, onOpen }:
 
   return (
     <>
-      <p className="muted small">Suivez un sujet juridique. Jurilux remonte ici les décisions qui y
-        correspondent — et signale les nouvelles au fil des mises à jour du corpus.</p>
+      <div className="alert-topbar">
+        <p className="muted small" style={{ margin: 0 }}>Suivez un sujet juridique. Jurilux remonte ici les décisions qui y
+          correspondent — et signale les nouvelles au fil des mises à jour du corpus.</p>
+        {alerts && alerts.length > 0 && (
+          <button className="ghost" onClick={checkAll} disabled={checking}>{checking ? '…' : '↻ Vérifier toutes'}</button>
+        )}
+      </div>
       {!alerts ? <p className="muted">Chargement…</p> : alerts.length === 0 ? (
         <p className="muted small">Aucune alerte. Créez votre première veille ci-dessous.</p>
       ) : (

@@ -285,6 +285,7 @@ export const listAlerts = () => wsGet<{ items: Alert[] }>('/api/alerts').then((d
 export const createAlert = (query: string, source_type?: string) =>
   wsSend<Alert>('/api/alerts', 'POST', { query, source_type });
 export const checkAlert = (id: number) => wsSend<{ new: number }>(`/api/alerts/${id}/check`, 'POST');
+export const checkAllAlerts = () => wsSend<{ new: number }>('/api/alerts/check-all', 'POST');
 export const alertHits = (id: number) => wsGet<{ items: AlertHit[] }>(`/api/alerts/${id}/hits`).then((d) => d.items);
 export const deleteAlert = (id: number) => wsSend<{ ok: boolean }>(`/api/alerts/${id}`, 'DELETE');
 

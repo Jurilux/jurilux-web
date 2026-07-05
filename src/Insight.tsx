@@ -1,9 +1,9 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
   insightStats, insightLawyers, insightLawyer, adminLogin, logout, getStoredEmail, HttpError,
-  InsightLawyer, InsightProfile,
+  InsightLawyer, InsightProfile, InsightCase,
 } from './api';
-import { jurisCourt } from './juridictions';
+import { jurisCourt, jurisDate, jurisRef } from './juridictions';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
@@ -81,6 +81,8 @@ function InsightMain({ stats, onLogout }: {
     return () => clearTimeout(t);
   }, [q]);
 
+  const maxCases = list && list.length ? Math.max(...list.map((l) => l.cases)) : 1;
+
   return (
     <div className="insight">
       <header className="admin-header">
@@ -95,55 +97,67 @@ function InsightMain({ stats, onLogout }: {
           Usage interne (base légale : intérêt légitime — aucune rediffusion). Volontairement <b>pas</b> de
           magistrats ni de greffiers.
         </div>
-        {stats && (
-          <p className="muted insight-stats">
-            <b>{stats.lawyers.toLocaleString('fr-FR')}</b> avocats indexés ·
-            {' '}<b>{stats.appearances.toLocaleString('fr-FR')}</b> apparitions
-          </p>
-        )}
 
         {sel ? (
           <Profile p={sel} onBack={() => setSel(null)} />
         ) : (
           <>
+            {stats && (
+              <p className="muted insight-stats">
+                <b>{stats.lawyers.toLocaleString('fr-FR')}</b> avocats indexés ·
+                {' '}<b>{stats.appearances.toLocaleString('fr-FR')}</b> apparitions
+              </p>
+            )}
             <input className="insight-search" placeholder="Rechercher un avocat…" value={q}
               onChange={(e) => setQ(e.target.value)} autoFocus />
+            {list && (
+              <p className="insight-count muted">
+                {list.length}{list.length === 100 ? '+' : ''} résultat{list.length > 1 ? 's' : ''}
+                {' '}· classés par nombre de décisions
+              </p>
+            )}
             {loading && !list ? <p className="muted">Chargement…</p> : (
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Avocat</th><th className="num">Décisions</th><th>Période</th></tr></thead>
-                  <tbody>
-                    {(list || []).map((l) => (
-                      <tr key={l.name_key} className="insight-row"
-                        onClick={() => insightLawyer(l.name_key).then(setSel)}>
-                        <td><b>{l.name}</b></td>
-                        <td className="num">{l.cases}</td>
-                        <td className="muted">{yearsSpan(l.first_year, l.last_year)}</td>
-                      </tr>
-                    ))}
-                    {list && list.length === 0 && (
-                      <tr><td colSpan={3} className="muted">Aucun avocat{q ? ` pour « ${q} »` : ''}.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <ol className="insight-list">
+                {(list || []).map((l, i) => (
+                  <li key={l.name_key}>
+                    <button className="lw-row" onClick={() => insightLawyer(l.name_key).then(setSel)}>
+                      <span className="rank">{q ? '·' : `#${i + 1}`}</span>
+                      <span className="lw-name">{l.name}</span>
+                      <span className="lw-bar" aria-hidden="true">
+                        <span className="lw-bar-fill" style={{ width: `${Math.max(4, Math.round((l.cases / maxCases) * 100))}%` }} />
+                      </span>
+                      <span className="lw-count">{l.cases}</span>
+                      <span className="lw-period muted">{yearsSpan(l.first_year, l.last_year)}</span>
+                    </button>
+                  </li>
+                ))}
+                {list && list.length === 0 && (
+                  <li className="muted insight-empty">Aucun avocat{q ? ` pour « ${q} »` : ''}.</li>
+                )}
+              </ol>
             )}
           </>
         )}
       </main>
-      <footer className="insight-foot muted">Insight — maquette interne <span className="version">{APP_VERSION}</span></footer>
+      <footer className="insight-foot">Insight — maquette interne <span className="version">{APP_VERSION}</span></footer>
     </div>
   );
 }
 
 function Profile({ p, onBack }: { p: InsightProfile; onBack: () => void }) {
-  // Répartition par juridiction dérivée du doc_id (plus fiable que la clé, souvent nulle).
-  const counts: Record<string, number> = {};
+  // Répartitions dérivées des doc_id (plus fiables que la clé juridiction, souvent nulle).
+  const jc: Record<string, number> = {};
+  const yc: Record<number, number> = {};
   for (const c of p.cases) {
-    const label = jurisCourt(c.doc_id, c.juridiction_key);
-    counts[label] = (counts[label] || 0) + 1;
+    const court = jurisCourt(c.doc_id, c.juridiction_key);
+    jc[court] = (jc[court] || 0) + 1;
+    if (c.year) yc[c.year] = (yc[c.year] || 0) + 1;
   }
-  const courts = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const courts = Object.entries(jc).sort((a, b) => b[1] - a[1]);
+  const yrs = Object.keys(yc).map(Number).sort((a, b) => a - b);
+  const yMax = Math.max(1, ...Object.values(yc));
+  const allYears = yrs.length ? Array.from({ length: yrs[yrs.length - 1] - yrs[0] + 1 }, (_, i) => yrs[0] + i) : [];
+
   return (
     <div className="insight-profile">
       <button className="back linklike" onClick={onBack}>← Tous les avocats</button>
@@ -154,28 +168,41 @@ function Profile({ p, onBack }: { p: InsightProfile; onBack: () => void }) {
         <div className="stat-tile"><div className="stat-label">juridictions</div><div className="stat-value">{courts.length}</div></div>
       </div>
 
+      {allYears.length > 1 && (
+        <>
+          <h3>Activité par année</h3>
+          <div className="year-chart">
+            {allYears.map((y) => (
+              <div key={y} className="year-bar" title={`${y} : ${yc[y] || 0} décision(s)`}>
+                <div className="year-bar-fill" style={{ height: `${Math.round(((yc[y] || 0) / yMax) * 100)}%` }} />
+                <span className="year-lbl">{allYears.length <= 18 || y % 5 === 0 ? `’${String(y).slice(2)}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <h3>Répartition par juridiction</h3>
       <div className="insight-chips">
         {courts.map(([label, n]) => <span key={label} className="chip">{label} · {n}</span>)}
       </div>
 
       <h3>Décisions ({p.cases_count})</h3>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Décision</th><th>Année</th><th>Juridiction</th><th></th></tr></thead>
-          <tbody>
-            {p.cases.map((c) => (
-              <tr key={c.doc_id}>
-                <td className="mono-cell">{c.doc_id}</td>
-                <td>{c.year ?? '—'}</td>
-                <td className="muted">{jurisCourt(c.doc_id, c.juridiction_key)}</td>
-                <td><a href={`/docs/${c.doc_id}.pdf`} target="_blank" rel="noopener noreferrer">PDF ↗</a></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="insight-cases">
+        {p.cases.map((c) => <CaseRow key={c.doc_id} c={c} />)}
       </div>
     </div>
+  );
+}
+
+function CaseRow({ c }: { c: InsightCase }) {
+  const meta = [jurisRef(c.doc_id), jurisDate(c.doc_id) || (c.year ? String(c.year) : null)].filter(Boolean).join(' · ');
+  return (
+    <a className="case-row" href={`/docs/${c.doc_id}.pdf`} target="_blank" rel="noopener noreferrer">
+      <span className="case-court">{jurisCourt(c.doc_id, c.juridiction_key)}</span>
+      <span className="case-meta muted">{meta}</span>
+      <span className="case-open">PDF ↗</span>
+    </a>
   );
 }
 

@@ -360,16 +360,49 @@ a.nav-item { display: block; text-decoration: none; }
 .insight-search { width: 100%; max-width: 420px; padding: 10px 14px; border: 1px solid var(--border);
   border-radius: 10px; font: inherit; font-size: 16px; background: var(--card); color: var(--text); margin-bottom: 14px; }
 .insight-search:focus { outline: none; border-color: var(--primary); }
-.insight-row { cursor: pointer; transition: .12s; }
-.insight-row:hover { background: var(--primary-soft); }
+.insight-count { font-size: 12.5px; margin: 0 0 10px; }
 .insight-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 6px; }
 .insight-profile h2 { font-family: var(--serif); margin: 6px 0 14px; }
-.insight-profile h3 { font-family: var(--serif); font-size: 1.05rem; color: var(--primary); margin: 20px 0 8px; }
+.insight-profile h3 { font-family: var(--serif); font-size: 1.05rem; color: var(--primary); margin: 22px 0 8px; }
 .insight .back { display: inline-block; margin-bottom: 10px; font-size: 13px; }
 .insight-foot { padding: 14px clamp(16px,4vw,32px); font-size: 12px; text-align: center;
   color: var(--muted-2); border-top: 1px solid var(--chrome-line); background: var(--chrome); }
-.mono-cell { font-family: var(--mono); font-size: 12px; }
-td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* liste classée : rang · nom · barre de volume · nb · période */
+.insight-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.lw-row { width: 100%; display: grid; grid-template-columns: 42px 1fr 130px 46px 92px; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px;
+  cursor: pointer; font: inherit; text-align: left; color: var(--text); transition: .12s; }
+.lw-row:hover { border-color: var(--primary); background: var(--primary-soft); }
+.rank { font-family: var(--mono); font-size: 12px; color: var(--muted-2); }
+.lw-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lw-bar { height: 8px; background: var(--border-2); border-radius: 99px; overflow: hidden; }
+.lw-bar-fill { display: block; height: 100%; background: var(--primary); border-radius: 99px; }
+.lw-count { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.lw-period { font-size: 12px; text-align: right; }
+.insight-empty { padding: 14px; }
+
+/* mini-graphe d'activité par année */
+.year-chart { display: flex; align-items: flex-end; gap: 3px; height: 92px; margin: 2px 0 4px; }
+.year-bar { flex: 1 1 0; min-width: 5px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.year-bar-fill { width: 72%; min-height: 2px; background: var(--primary); border-radius: 3px 3px 0 0; transition: height .2s; }
+.year-lbl { font-family: var(--mono); font-size: 9px; color: var(--muted-2); margin-top: 4px; }
+
+/* décisions en cartes lisibles (cour · n° · date) */
+.insight-cases { display: flex; flex-direction: column; gap: 6px; }
+.case-row { display: flex; align-items: baseline; gap: 12px; text-decoration: none; color: var(--text);
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 9px 13px; transition: .12s; }
+.case-row:hover { border-color: var(--primary); background: var(--primary-soft); }
+.case-court { font-weight: 600; font-size: 13.5px; }
+.case-meta { flex: 1; font-size: 12px; }
+.case-open { font-size: 12px; color: var(--primary); white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .lw-row { grid-template-columns: 30px 1fr 46px; gap: 10px; }
+  .lw-bar, .lw-period { display: none; }
+  .case-row { flex-wrap: wrap; gap: 4px 12px; }
+  .case-meta { flex-basis: 100%; }
+}
 
 @media (max-width: 640px) { .status-txt { display: none; } }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
-  getStoredEmail, listAlerts, createAlert, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
+  getStoredEmail, listAlerts, createAlert, AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { LegalPage } from './Legal';
 import { Cabinet, SaveToDossierModal } from './Cabinet';

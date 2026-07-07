@@ -33,7 +33,8 @@ export interface AskResponse {
   refused: boolean;
   status?: 'ok' | 'partial';
   feedback?: Feedback | null;
-  suggested_question?: string | null;
+  suggested_question?: string | null;   // autre angle (pivot 1 clic)
+  follow_ups?: string[] | null;         // parcours guidé : questions de suivi logiques ordonnées
   prompt_version?: string;
 }
 

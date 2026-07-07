@@ -218,6 +218,17 @@ button.send:disabled { opacity: .4; cursor: not-allowed; }
 .chip { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--card); color: var(--text); cursor: pointer; font: inherit; transition: .15s; text-align: left; }
 .chip:hover { border-color: var(--primary); background: var(--primary-soft); }
+/* Parcours guidé (questions de suivi ordonnées) */
+.followups { margin: 12px 0 4px; padding-top: 10px; border-top: 1px solid var(--border-2);
+  display: flex; flex-direction: column; gap: 8px; }
+.followups-lead { font-size: 12.5px; color: var(--primary-700); font-weight: 500; }
+.followups-list { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.followups-list li { color: var(--muted); }
+.followup-btn { text-align: left; background: transparent; border: none; color: var(--primary);
+  font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; padding: 2px 0;
+  border-bottom: 1px dashed transparent; transition: .15s; }
+.followup-btn:hover { border-bottom-color: var(--primary); }
+.chip-lateral { align-self: flex-start; color: var(--primary-700); }
 .fb-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px;
   border-top: 1px solid var(--border-2); flex-wrap: wrap; }
 .fb-q { font-size: 12.5px; color: var(--muted); }

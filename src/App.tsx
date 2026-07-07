@@ -20,6 +20,7 @@ interface Message {
   status?: 'ok' | 'partial';
   feedback?: Feedback | null;
   suggested_question?: string | null;
+  follow_ups?: string[] | null;    // parcours guidé : questions de suivi logiques ordonnées
   streaming?: boolean;             // réponse en cours de streaming
   error?: string;
 }
@@ -256,6 +257,33 @@ function FeedbackBar({ question, status }: { question: string; status: string })
   );
 }
 
+// Parcours guidé : série ordonnée de questions de suivi (1 clic) pour compléter le sujet,
+// plus un « autre angle » latéral. Affiché après une réponse aboutie.
+function FollowUps({ m, actions }: { m: Message; actions: MsgActions }) {
+  const suite = m.follow_ups || [];
+  const autre = m.suggested_question;
+  if (suite.length === 0 && !autre) return null;
+  return (
+    <div className="followups">
+      {suite.length > 0 && (
+        <>
+          <span className="followups-lead">Pour aller plus loin — parcours guidé :</span>
+          <ol className="followups-list">
+            {suite.map((q, i) => (
+              <li key={i}>
+                <button className="followup-btn" onClick={() => actions.onAsk(q)}>{q}</button>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      {autre && (
+        <button className="chip chip-lateral" onClick={() => actions.onAsk(autre)}>↔️ Autre angle : {autre}</button>
+      )}
+    </div>
+  );
+}
+
 // Rebond : question-pivot (1 clic) + reformulations prêtes + élargissement des filtres.
 function RecoveryActions({ m, actions }: { m: Message; actions: MsgActions }) {
   const pivot = m.suggested_question;
@@ -351,6 +379,7 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
       {m.status === 'partial' && <RecoveryActions m={m} actions={actions} />}
 
       {m.citations && m.citations.length > 0 && <Sources citations={m.citations} />}
+      {!m.streaming && <FollowUps m={m} actions={actions} />}
       <FeedbackBar question={m.question || ''} status={m.status || 'ok'} />
     </div>
   );
@@ -571,6 +600,7 @@ export default function App() {
       citations: dedup(meta.citations || []),
       refused: meta.refused, status: meta.status,
       feedback: meta.feedback, suggested_question: meta.suggested_question,
+      follow_ups: meta.follow_ups,
     } : m));
 
     try {

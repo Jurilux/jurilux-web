@@ -343,6 +343,220 @@ await journey(browser, 'H04-admin-audit', async (page) => {
   await page.waitForTimeout(700);
 });
 
+// ═══════════════ VAGUE 2 — PERMISSIONS (gating) & CRUD COMPLET ═══════════════
+// Les parcours CRUD sont AUTO-CONTENUS (ils créent leurs propres entités jetables) pour ne
+// pas altérer les données seedées dont dépendent les autres parcours.
+
+// -- Gating / permissions --
+await journey(browser, 'W2-01-admin-refus-pro', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');            // pro = pas admin
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await voir(page, "n'a pas les droits administrateur", { timeout: 8000 });
+});
+await journey(browser, 'W2-02-admin-refus-anonyme', async (page) => {
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await voir(page, 'réservé aux administrateurs', { timeout: 8000 });
+});
+await journey(browser, 'W2-03-vault-refus-anonyme', async (page) => {
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'Connectez-vous pour utiliser votre Vault', { timeout: 8000 });
+});
+await journey(browser, 'W2-04-cabinet-member-sans-gestion', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.collab@demo.lu');  // membre simple
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'Quitter', { timeout: 8000 });          // membre : peut quitter
+  await absent(page, 'Supprimer le cabinet');              // mais pas supprimer
+});
+await journey(browser, 'W2-05-cabinet-owner-gestion', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'Supprimer le cabinet', { timeout: 8000 });
+});
+
+// -- CRUD auto-contenu : cabinet créé puis supprimé --
+await journey(browser, 'W2-06-workspace-crud', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  const nom = `Cabinet CRUD ${Date.now()}`;
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await voir(page, nom, { timeout: 8000 });
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();  // ouvrir
+  await page.getByRole('button', { name: /Supprimer le cabinet/ }).first().click(); // confirm auto-accepté
+  await page.waitForTimeout(800);
+  await absent(page, nom);
+});
+
+// -- CRUD membre : créer cabinet, inviter, changer rôle, retirer --
+await journey(browser, 'W2-07-membre-invite-role-retrait', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  const nom = `Cab Membres ${Date.now()}`;
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  // inviter un compte existant
+  await page.getByPlaceholder('email d\'un membre inscrit').fill('weber.owner@demo.lu');
+  await page.getByRole('button', { name: 'Inviter' }).first().click();
+  await voir(page, 'weber.owner@demo.lu', { timeout: 8000 });
+  // changer son rôle en admin
+  await page.locator('select.cell-select').first().selectOption('admin').catch(() => {});
+  await page.waitForTimeout(500);
+  // le retirer (confirm auto-accepté)
+  await page.getByRole('button', { name: 'Retirer' }).first().click();
+  await page.waitForTimeout(700);
+  await absent(page, 'weber.owner@demo.lu');
+});
+
+// -- CRUD alerte : créer puis supprimer --
+await journey(browser, 'W2-08-alerte-crud', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Alertes');
+  const sujet = `veille ${Date.now()}`;
+  await page.getByPlaceholder(/Sujet à suivre/).fill(sujet);
+  await page.getByRole('button', { name: 'Suivre' }).first().click();
+  await voir(page, sujet, { timeout: 8000 });
+  await page.locator('.drawer').getByText(sujet, { exact: false }).first().click();  // ouvrir l'alerte
+  await page.getByRole('button', { name: /Supprimer l'alerte/ }).first().click();     // confirm auto
+  await page.waitForTimeout(700);
+});
+
+// -- CRUD clé d'API : créer puis révoquer --
+await journey(browser, 'W2-09-cle-api-crud', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon compte');
+  const nom = `Clé ${Date.now()}`;
+  await page.getByPlaceholder('Nom de la clé (ex. Intégration compta)').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await voir(page, nom, { timeout: 8000 });
+  await page.locator('.drawer').getByRole('button', { name: 'Révoquer' }).first().click();
+  await page.waitForTimeout(700);
+});
+
+// -- CRUD prompt : créer puis supprimer --
+await journey(browser, 'W2-10-prompt-crud', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon compte');
+  const titre = `Prompt ${Date.now()}`;
+  await page.getByPlaceholder('Titre du prompt').fill(titre);
+  await page.getByPlaceholder('Corps du prompt…').fill('Analyse ce contrat clause par clause.');
+  await page.locator('.drawer').getByRole('button', { name: 'Ajouter' }).first().click();
+  await voir(page, titre, { timeout: 8000 });
+  await page.locator('.drawer').getByRole('button', { name: 'Supprimer' }).first().click();
+  await page.waitForTimeout(700);
+});
+
+// -- Validation : inscription avec mot de passe trop court --
+await journey(browser, 'W2-11-inscription-mdp-court', async (page) => {
+  await accueil(page);
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(`court_${Date.now()}@demo.lu`);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('123');
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(700);
+  // refus attendu : le formulaire reste affiché (non connecté)
+  await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });
+});
+
+// -- Changement de mot de passe avec mauvais ancien --
+await journey(browser, 'W2-12-changer-mdp-mauvais-ancien', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon compte');
+  const old = page.getByPlaceholder('Mot de passe actuel');
+  await old.waitFor({ state: 'visible', timeout: 8000 });
+  await old.fill('mauvais_ancien');
+  await page.getByPlaceholder('Nouveau mot de passe (≥ 8 caractères)').fill('nouveaumotdepasse');
+  await page.getByRole('button', { name: 'Changer' }).first().click();
+  await page.waitForTimeout(800);
+  // échec attendu : on reste sur le volet compte (pas de crash, mot de passe inchangé)
+  await voir(page, "Clés d'API", { timeout: 8000 });
+});
+
+// ═══════════════ VAGUE 3 — VAULT COMPLET (analyses, hybride, comparaison, revue contrat) ═══════════════
+// Ouvre le Vault du « pro » (2 docs seedés) et clique le premier « Analyser ».
+const vaultPro = async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'Mes documents', { timeout: 8000 });
+};
+const ouvrirAnalyse = async (page) => {
+  await page.locator('table').getByRole('button', { name: 'Analyser' }).first().click();
+  await voir(page, 'Analyses —', { timeout: 8000 });
+};
+
+await journey(browser, 'W3-01-vault-citations', async (page) => {
+  await vaultPro(page); await ouvrirAnalyse(page);
+  await page.getByRole('button', { name: 'Vérifier les citations' }).first().click();
+  await voir(page, 'vérifiée', { timeout: 10000 });   // « X / Y référence(s) vérifiée(s) »
+});
+await journey(browser, 'W3-02-vault-extraire', async (page) => {
+  await vaultPro(page); await ouvrirAnalyse(page);
+  await page.getByRole('button', { name: 'Extraire' }).first().click();
+  await voir(page, 'Matière', { timeout: 10000 });
+});
+await journey(browser, 'W3-03-vault-contre-argumentaire', async (page) => {
+  await vaultPro(page); await ouvrirAnalyse(page);
+  await page.getByRole('button', { name: 'Contre-argumentaire' }).first().click();
+  await voir(page, 'Contre-argumentaire de test', { timeout: 12000 });
+});
+await journey(browser, 'W3-04-vault-chronologie', async (page) => {
+  await vaultPro(page); await ouvrirAnalyse(page);
+  await page.getByRole('button', { name: 'Chronologie' }).first().click();
+  await page.waitForTimeout(1200);   // chronologie déterministe (peut être vide)
+});
+await journey(browser, 'W3-05-vault-hybride', async (page) => {
+  await vaultPro(page);
+  await page.getByText('Inclure le corpus public', { exact: false }).first().click().catch(() => {});
+  await page.getByPlaceholder(/quels sont les délais/).fill('Préavis dans mes documents et le Code du travail ?');
+  await page.getByRole('button', { name: 'Demander' }).first().click();
+  await page.waitForTimeout(1800);
+});
+await journey(browser, 'W3-06-vault-comparer', async (page) => {
+  await vaultPro(page);
+  const cases = page.locator('table input[type=checkbox]');
+  await cases.nth(0).check().catch(() => {});
+  await cases.nth(1).check().catch(() => {});
+  await page.getByRole('button', { name: /Comparer en tableau/ }).first().click();
+  await voir(page, 'Comparaison', { timeout: 8000 });
+});
+await journey(browser, 'W3-07-vault-playbook-creer', async (page) => {
+  await vaultPro(page);
+  const nom = `Playbook ${Date.now()}`;
+  await page.getByPlaceholder('Nom du playbook (ex : NDA standard)').fill(nom);
+  await page.getByPlaceholder('Intitulé (ex : clause de confidentialité)').first().fill('Clause de résiliation');
+  await page.getByPlaceholder('Ce qui doit être vérifié').first().fill('Vérifier la présence d’une clause de résiliation.');
+  await page.getByRole('button', { name: /Créer le playbook/ }).first().click();
+  await page.locator('.cab-row').filter({ hasText: nom }).first().waitFor({ state: 'visible', timeout: 12000 });
+});
+await journey(browser, 'W3-08-vault-revue-contrat', async (page) => {
+  await vaultPro(page);
+  // créer un playbook dédié puis lancer la revue de contrat (doc + playbook du même user)
+  const nom = `PB Revue ${Date.now()}`;
+  await page.getByPlaceholder('Nom du playbook (ex : NDA standard)').fill(nom);
+  await page.getByPlaceholder('Intitulé (ex : clause de confidentialité)').first().fill('Clause de confidentialité');
+  await page.getByPlaceholder('Ce qui doit être vérifié').first().fill('Vérifier la confidentialité.');
+  await page.getByRole('button', { name: /Créer le playbook/ }).first().click();
+  await page.locator('.cab-row').filter({ hasText: nom }).first().waitFor({ state: 'visible', timeout: 12000 });
+  // sélectionner document + playbook puis analyser
+  const selects = page.locator('select');
+  await selects.nth(0).selectOption({ index: 1 }).catch(() => {});
+  await selects.nth(1).selectOption({ index: 1 }).catch(() => {});
+  await page.getByRole('button', { name: 'Analyser' }).last().click();
+  await voir(page, /conforme|à revoir|absent/, { timeout: 12000 });
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

@@ -114,6 +114,7 @@ export function makeRunner(results) {
     });
     const page = await ctx.newPage();
     page.setDefaultTimeout(8000);
+    page.on('dialog', (d) => d.accept().catch(() => {}));  // confirm() des actions destructives → OK
     const bag = instrument(page);
     const t0 = Date.now();
     const rec = { name, ok: true, ms: 0 };

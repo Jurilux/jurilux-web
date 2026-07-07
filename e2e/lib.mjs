@@ -130,9 +130,12 @@ export async function acteur(browser, email) {
 }
 
 // ---- moteur d'un parcours ----
-export function makeRunner(results) {
+// `intentions` : map name → { intention, attendu }. Chaque parcours porte donc son INTENTION
+// (but utilisateur) et son RÉSULTAT ATTENDU ; le runner y ajoute le RÉSULTAT FINAL mesuré.
+export function makeRunner(results, intentions = {}) {
   return async function journey(browser, name, fn) {
     if (ONLY && !name.includes(ONLY)) return;
+    const meta = intentions[name] || {};
     const ctx = await browser.newContext({
       viewport: { width: 1180, height: 900 },
       permissions: ['clipboard-read', 'clipboard-write'],  // pour le parcours « Partager » (copie du lien)
@@ -142,10 +145,13 @@ export function makeRunner(results) {
     page.on('dialog', (d) => d.accept().catch(() => {}));  // confirm() des actions destructives → OK
     const bag = instrument(page);
     const t0 = Date.now();
-    const rec = { name, ok: true, ms: 0 };
+    const rec = { name, intention: meta.intention || null, attendu: meta.attendu || null, ok: true, ms: 0 };
     try { await fn(page, bag); await page.waitForTimeout(200); }
     catch (e) { rec.ok = false; rec.error = String(e.message || e).split('\n')[0].slice(0, 220); }
     rec.ms = Date.now() - t0;
+    // Résultat final : CONFORME si le parcours a réussi ET qu'aucune page n'a planté.
+    rec.final = (rec.ok && bag.errors.length === 0) ? 'CONFORME' : 'NON CONFORME';
+    rec.resultat_final = rec.ok ? (meta.attendu || 'ok') : (rec.error || 'échec');
     try { rec.perf = await perf(page); } catch {}
     rec.consoleIssues = bag.console.filter((c) => !c.text.includes('Deprecated API')).length;
     rec.pageErrors = bag.errors.length;
@@ -154,8 +160,11 @@ export function makeRunner(results) {
     rec.requestCount = bag.requests.length;
     try { await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); } catch {}
     results.push(rec);
-    const flag = rec.ok ? '✓' : '✗';
-    console.log(`${flag} ${name} (${rec.ms}ms, ${rec.requestCount} req)${rec.ok ? '' : '  ← ' + rec.error}`);
+    const flag = rec.final === 'CONFORME' ? '✓' : '✗';
+    console.log(`${flag} ${name} — ${rec.final}`);
+    if (meta.intention) console.log(`    intention : ${meta.intention}`);
+    if (meta.attendu) console.log(`    attendu   : ${meta.attendu}`);
+    console.log(`    final     : ${rec.ok ? meta.attendu || 'ok' : '⚠ ' + rec.error}  (${rec.ms}ms)`);
     await ctx.close();
   };
 }

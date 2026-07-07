@@ -37,11 +37,29 @@ Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 `e2e/artifacts`), `ONLY=<sous-chaîne>` (ne jouer qu'un parcours, ex. `ONLY=13-admin`),
 `SHARE_ID` (permalien à ouvrir), `PW_CHROME` (chemin du binaire Chromium).
 
+## Intention → attendu → final
+
+Chaque parcours porte, dans `e2e/intentions.mjs`, une **intention** (le but de l'utilisateur)
+et un **résultat attendu**. Le runner mesure le **résultat final** et affiche les trois en
+regard :
+
+```
+✓ D04-cloison-collaborateur-404 — CONFORME
+    intention : Un collaborateur non autorisé consulte le cabinet
+    attendu   : Le dossier restreint lui est INVISIBLE
+    final     : Le dossier restreint lui est INVISIBLE  (3.5s)
+```
+
+Le verdict est **CONFORME** si le parcours réussit ET qu'aucune page n'a planté, sinon
+**NON CONFORME** (avec l'écart constaté). `rapport.json` contient le tableau
+`intention → attendu → final` — une **documentation vivante** du comportement produit.
+Un parcours sans intention déclarée est signalé (`sansIntention`).
+
 ## Sortie
 
 - `e2e/artifacts/<parcours>.png` — capture pleine page de chaque parcours.
-- `e2e/artifacts/rapport.json` — agrégat : succès/échec, perf, erreurs, réseau, ressources
-  cassées. Exploitable pour un tableau de bord ou une passerelle CI.
+- `e2e/artifacts/rapport.json` — agrégat : intention/attendu/final par parcours, perf, erreurs,
+  réseau, ressources cassées. Exploitable pour un tableau de bord ou une passerelle CI.
 
 ## Parcours couverts (129, avec assertions)
 

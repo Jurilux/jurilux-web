@@ -7,10 +7,11 @@ import {
   FRONT, OUT, launch, makeRunner, voir, absent,
   dismissOnboarding, ask, login, menuItem, ouvrirMenu, ouvrirCabinet, acteur,
 } from './lib.mjs';
+import { INTENTIONS } from './intentions.mjs';
 
 const SHARE_ID = process.env.SHARE_ID || '';
 const results = [];
-const journey = makeRunner(results);
+const journey = makeRunner(results, INTENTIONS);   // chaque parcours : intention + attendu + final
 const browser = await launch();
 
 // Ouvre l'accueil, ferme l'onboarding. Raccourci commun.
@@ -1231,15 +1232,19 @@ await browser.close();
 const summary = {
   when: new Date().toISOString(),
   total: results.length,
+  conformes: results.filter((r) => r.final === 'CONFORME').length,
   ok: results.filter((r) => r.ok).length,
-  failed: results.filter((r) => !r.ok).map((r) => ({ name: r.name, error: r.error })),
+  failed: results.filter((r) => !r.ok).map((r) => ({ name: r.name, intention: r.intention, attendu: r.attendu, error: r.error })),
+  sansIntention: results.filter((r) => !r.intention).map((r) => r.name),   // parcours sans intention déclarée
   withConsoleIssues: results.filter((r) => r.consoleIssues > 0).map((r) => r.name),
   withPageErrors: results.filter((r) => r.pageErrors > 0).map((r) => r.name),
   brokenResources: [...new Set(results.flatMap((r) => (r.broken || []).map((b) => `${b.status} ${b.url}`)))],
-  journeys: results,
+  // Tableau intention → attendu → final, exploitable comme documentation vivante.
+  journeys: results.map((r) => ({ name: r.name, intention: r.intention, attendu: r.attendu, final: r.final, resultat: r.resultat_final, ms: r.ms })),
 };
 writeFileSync(`${OUT}/rapport.json`, JSON.stringify(summary, null, 2));
-console.log(`\n═══ ${summary.ok}/${summary.total} parcours OK · erreurs page:${summary.withPageErrors.length} · ressources cassées:${summary.brokenResources.length} ═══`);
+if (summary.sansIntention.length) console.log(`⚠ parcours sans intention déclarée : ${summary.sansIntention.join(', ')}`);
+console.log(`\n═══ ${summary.conformes}/${summary.total} CONFORMES · erreurs page:${summary.withPageErrors.length} · ressources cassées:${summary.brokenResources.length} ═══`);
 if (summary.failed.length) { console.log('Échecs :'); summary.failed.forEach((f) => console.log(`  ✗ ${f.name} — ${f.error}`)); }
 console.log(`rapport → ${OUT}/rapport.json`);
 // Code de sortie non nul si un parcours échoue ou si une page plante → utilisable en gate CI.

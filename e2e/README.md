@@ -39,7 +39,19 @@ Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 - `e2e/artifacts/rapport.json` — agrégat : succès/échec, perf, erreurs, réseau, ressources
   cassées. Exploitable pour un tableau de bord ou une passerelle CI.
 
-## Parcours couverts (41, avec assertions)
+## Parcours couverts (72, avec assertions)
+
+Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-navigateur » :
+- **Vague 2 — permissions & CRUD** : refus admin (non-admin/anonyme), Vault anonyme, contrôles
+  cabinet masqués aux membres, CRUD workspace/membre+rôle/alerte/clé API/prompt, validations.
+- **Vague 3 — Vault complet** : vérif. citations, extraction, contre-argumentaire, chronologie,
+  recherche hybride, comparaison tabulaire, playbook, revue de contrat.
+- **Vague 4 — recherche & insight** : filtres (type/année/juridiction), refus + « Élargir »,
+  sauvegarde en dossier, historique, fiche avocat, analytics par matière.
+- **Vague 5 — multi-acteurs** : nouveau client bout-en-bout ; collaboration cabinet ; cloison
+  déontologique vérifiée sur 3 sessions (owner / collaborateur refusé / associé autorisé).
+
+### Socle A–H
 
 Organisés par domaine dans `journeys.mjs`, chacun **vérifie un résultat** (pas juste une capture) :
 

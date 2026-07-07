@@ -39,7 +39,7 @@ Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 - `e2e/artifacts/rapport.json` — agrégat : succès/échec, perf, erreurs, réseau, ressources
   cassées. Exploitable pour un tableau de bord ou une passerelle CI.
 
-## Parcours couverts (106, avec assertions)
+## Parcours couverts (129, avec assertions)
 
 Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-navigateur » :
 - **Vague 2 — permissions & CRUD** : refus admin (non-admin/anonyme), Vault anonyme, contrôles
@@ -61,6 +61,22 @@ Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-
 - **Vague 10 — erreurs atteignables & variantes** : inscription/connexion rejetées, invitation
   d'un non-inscrit, autorisation d'un non-membre, Vault vide, recherche avocat sans résultat,
   tris Insight, filtre source « loi », filtres combinés.
+- **Vague 11 — variantes recherche** : question d'exemple, conversation multi-tours, nouvelle
+  recherche (reset), filtre projet de loi, champ « ce qui manquait », mentions légales.
+- **Vague 12 — Vault profond** : chronologie sur document daté, suppression de playbook,
+  comparaison de 3 documents, question hybride.
+- **Vague 13 — Insight profond** : issue estimée, confrères, activité par année, répartition
+  par juridiction, colonne taux (analytics).
+- **Vague 14 — Admin profond** : entrées & filtre d'audit, éval détaillée, 2ᵉ question loguée,
+  inspecteur avec topK.
+- **Vague 15 — Cabinet profond** : ranger une réponse dans un dossier existant ou nouveau,
+  gating des contrôles de cloison pour un membre.
+
+## Gate CI
+
+`node e2e/journeys.mjs` **sort avec un code non nul** si un parcours échoue ou si une page
+plante — donc branchable tel quel dans un job CI (démarrer les deux serveurs, lancer le
+runner, laisser le code de sortie casser le build). Le `rapport.json` sert d'artefact.
 
 ### Socle A–H
 

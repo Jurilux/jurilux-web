@@ -1137,6 +1137,94 @@ await journey(browser, 'W12-04-vault-ask-hybride-suite', async (page) => {
   await page.waitForTimeout(1800);   // réponse hybride (docs privés + corpus public)
 });
 
+// ═══════════════ VAGUE 13 — INSIGHT EN PROFONDEUR ═══════════════
+const ouvrirProfil = async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Dupont');
+  await page.waitForTimeout(800);
+  await page.locator('.lw-row').first().click();
+  await voir(page, 'Décisions', { timeout: 8000 });
+};
+await journey(browser, 'W13-01-profil-issue-estimee', async (page) => {
+  await ouvrirProfil(page);
+  await voir(page, 'Issue estimée', { timeout: 8000 });
+});
+await journey(browser, 'W13-02-profil-confreres', async (page) => {
+  await ouvrirProfil(page);
+  await voir(page, 'Confrères', { timeout: 8000 });
+});
+await journey(browser, 'W13-03-profil-annees', async (page) => {
+  await ouvrirProfil(page);
+  await voir(page, 'Activité par année', { timeout: 8000 });
+});
+await journey(browser, 'W13-04-profil-juridiction', async (page) => {
+  await ouvrirProfil(page);
+  await voir(page, 'Répartition par juridiction', { timeout: 8000 });
+});
+await journey(browser, 'W13-05-analytics-taux', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Analytics contentieux/ }).first().click();
+  await voir(page, 'Taux', { timeout: 8000 });   // colonne taux de succès estimé
+});
+
+// ═══════════════ VAGUE 14 — ADMIN EN PROFONDEUR ═══════════════
+await journey(browser, 'W14-01-audit-entrees', async (page) => {
+  await admin(page, 'Audit');
+  await voir(page, '2026', { timeout: 8000 });   // des entrées d'audit horodatées existent
+});
+await journey(browser, 'W14-02-audit-filtre', async (page) => {
+  await admin(page, 'Audit');
+  await page.getByPlaceholder(/Filtrer par action/).fill('apikey');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(700);   // filtre appliqué (pas de crash)
+});
+await journey(browser, 'W14-03-eval-detail', async (page) => {
+  await admin(page, 'Banc de test');
+  await page.getByRole('button', { name: /Lancer le banc de test/ }).first().click();
+  await voir(page, 'Textes remontés', { timeout: 12000 });   // en-tête du rapport d'éval
+});
+await journey(browser, 'W14-04-questions-2e', async (page) => {
+  await admin(page, 'Questions');
+  await voir(page, 'préavis', { timeout: 8000 });   // 2e question seedée
+});
+await journey(browser, 'W14-05-probe-topk', async (page) => {
+  await admin(page, 'Inspecteur');
+  await page.getByPlaceholder(/Ex : conséquences/).fill('préavis licenciement');
+  await page.locator('form.probe-form select, form select').first().selectOption('30').catch(() => {});
+  await page.getByRole('button', { name: 'Inspecter' }).first().click();
+  await voir(page, 'CSJ', { timeout: 10000 });
+});
+
+// ═══════════════ VAGUE 15 — CABINET EN PROFONDEUR ═══════════════
+await journey(browser, 'W15-01-ranger-dans-dossier-existant', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await ask(page, 'Licenciement pour faute grave ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByTitle('Ranger dans un dossier').first().click();
+  await voir(page, 'Enregistrer dans un dossier', { timeout: 8000 });
+  await page.locator('.modal .hist-item').filter({ hasText: 'Dossier Martin' }).first().click();
+  await voir(page, 'rangée dans le dossier', { timeout: 8000 });   // ✓ confirmation
+});
+await journey(browser, 'W15-02-ranger-dans-nouveau-dossier', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await ask(page, 'Préavis légal ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByTitle('Ranger dans un dossier').first().click();
+  await voir(page, 'Enregistrer dans un dossier', { timeout: 8000 });
+  await page.getByPlaceholder('…ou nouveau dossier').fill(`Dossier E2E ${Date.now()}`);
+  await page.getByRole('button', { name: /Créer .* ranger/ }).first().click();
+  await voir(page, 'rangée dans le dossier', { timeout: 8000 });
+});
+await journey(browser, 'W15-03-membre-sans-restreindre', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.collab@demo.lu');   // simple membre
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'Dossier Martin', { timeout: 8000 });   // voit les dossiers ouverts
+  await absent(page, 'Restreindre');                       // mais pas les contrôles de cloison
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----
@@ -1154,3 +1242,5 @@ writeFileSync(`${OUT}/rapport.json`, JSON.stringify(summary, null, 2));
 console.log(`\n═══ ${summary.ok}/${summary.total} parcours OK · erreurs page:${summary.withPageErrors.length} · ressources cassées:${summary.brokenResources.length} ═══`);
 if (summary.failed.length) { console.log('Échecs :'); summary.failed.forEach((f) => console.log(`  ✗ ${f.name} — ${f.error}`)); }
 console.log(`rapport → ${OUT}/rapport.json`);
+// Code de sortie non nul si un parcours échoue ou si une page plante → utilisable en gate CI.
+process.exitCode = (summary.ok === summary.total && summary.withPageErrors.length === 0) ? 0 : 1;

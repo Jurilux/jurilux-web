@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, lazy, Suspense } from 'react';
 import {
   adminOverview, adminUsers, adminQuestions, adminFeedback, adminActivity, adminProbe, adminEval,
   adminSetPlan, adminSetAdmin, adminDeleteUser,
@@ -8,9 +8,11 @@ import {
   AdminHealth, AuditEntry,
 } from './api';
 
+const Documentation = lazy(() => import('./Documentation'));
+
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
 type Tab = 'dashboard' | 'inspector' | 'eval' | 'users' | 'questions' | 'feedback' | 'corpus'
-  | 'health' | 'config' | 'audit';
+  | 'health' | 'config' | 'audit' | 'docs';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
@@ -793,6 +795,7 @@ export default function AdminApp() {
     { key: 'health', label: 'Santé' },
     { key: 'config', label: 'Paramétrage' },
     { key: 'audit', label: 'Audit' },
+    { key: 'docs', label: '📘 Documentation' },
   ];
 
   return (
@@ -824,6 +827,7 @@ export default function AdminApp() {
         {tab === 'health' && <HealthTab />}
         {tab === 'config' && <ConfigTab />}
         {tab === 'audit' && <AuditTab />}
+        {tab === 'docs' && <Suspense fallback={<p className="muted">Chargement…</p>}><Documentation /></Suspense>}
       </main>
     </div>
   );

@@ -1,19 +1,28 @@
 // Bibliothèque du harnais E2E : lancement du navigateur, instrumentation (console/erreurs/
 // réseau), métriques de perf, assertions, et actions réutilisables (login, ask, navigation).
 // Les parcours (journeys.mjs) importent d'ici pour rester lisibles.
-import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 import { mkdirSync } from 'node:fs';
-const { chromium } = pw;
+
+// Résolution portable de Playwright : d'abord le module local/installé (`npm i -D playwright`
+// en CI), sinon repli sur l'installation globale du conteneur de dev. Aucun chemin codé en dur
+// obligatoire — le binaire Chromium est choisi par Playwright, sauf si PW_CHROME est fourni.
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch {
+  ({ chromium } = (await import('/opt/node22/lib/node_modules/playwright/index.js')).default);
+}
 
 export const FRONT = process.env.FRONT_URL || 'http://127.0.0.1:5173';
 export const OUT = process.env.OUT_DIR || new URL('./artifacts', import.meta.url).pathname;
 export const MDP = 'password123';
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const ONLY = process.env.ONLY || '';
 mkdirSync(OUT, { recursive: true });
 
 export async function launch() {
-  return chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
+  const opts = { args: ['--no-sandbox'] };
+  if (process.env.PW_CHROME) opts.executablePath = process.env.PW_CHROME;  // conteneur de dev
+  return chromium.launch(opts);
 }
 
 // ---- instrumentation par page ----

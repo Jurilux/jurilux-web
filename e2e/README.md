@@ -29,9 +29,13 @@ SHARE_ID=<id affiché par e2e_server> FRONT_URL=http://127.0.0.1:5173 \
   node e2e/journeys.mjs
 ```
 
+Playwright est résolu depuis `node_modules` (`npm i -D playwright` + `npx playwright install
+chromium`) ; à défaut, repli sur une installation globale. Pour forcer un binaire Chromium
+précis (utile en conteneur de dev) : `PW_CHROME=/chemin/vers/chrome`.
+
 Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 `e2e/artifacts`), `ONLY=<sous-chaîne>` (ne jouer qu'un parcours, ex. `ONLY=13-admin`),
-`SHARE_ID` (permalien à ouvrir dans le parcours 14).
+`SHARE_ID` (permalien à ouvrir), `PW_CHROME` (chemin du binaire Chromium).
 
 ## Sortie
 

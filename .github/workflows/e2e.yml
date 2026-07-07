@@ -1,0 +1,71 @@
+# Gate E2E — rejoue les ~129 parcours utilisateurs dans un vrai Chromium contre l'app réelle
+# (front Vite + backend de démo `functional.e2e_server` du dépôt jurilux-api, tout stubé).
+# Le runner sort en code non nul si un parcours échoue → casse le build.
+#
+# Prérequis : accès en lecture au dépôt jurilux-api. Par défaut on utilise le token du job ;
+# si jurilux-api est privé et non accessible avec ce token, un admin ajoute un secret CI_PAT
+# (PAT fine-grained en lecture sur jurilux-api).
+name: E2E — parcours utilisateurs (Chromium)
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout front
+        uses: actions/checkout@v4
+
+      - name: Checkout backend de démo (jurilux-api)
+        uses: actions/checkout@v4
+        with:
+          repository: Jurilux/jurilux-api
+          ref: main
+          path: .api
+          token: ${{ secrets.CI_PAT || github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dépendances backend
+        run: pip install -r .api/requirements.txt
+
+      - name: Démarrer le backend de démo (stubé)
+        working-directory: .api
+        run: |
+          python -m functional.e2e_server > /tmp/e2e_server.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8088/health && break; sleep 1; done
+          SID=$(grep -o 'SHARE_ID=[A-Za-z0-9_-]*' /tmp/e2e_server.log | head -1 | cut -d= -f2)
+          echo "SHARE_ID=$SID" >> "$GITHUB_ENV"
+
+      - name: Dépendances front
+        run: npm ci
+
+      - name: Playwright + Chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Démarrer le front (proxy Vite → backend de démo)
+        run: |
+          API_TARGET=http://127.0.0.1:8088 npx vite --host 127.0.0.1 --port 5173 > /tmp/vite.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:5173/ && break; sleep 1; done
+
+      - name: Jouer les parcours (échec = build cassé)
+        run: FRONT_URL=http://127.0.0.1:5173 node e2e/journeys.mjs
+
+      - name: Publier captures + rapport
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: e2e/artifacts/
+          if-no-files-found: warn

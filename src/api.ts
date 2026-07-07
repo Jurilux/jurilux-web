@@ -606,3 +606,19 @@ export const adminAudit = (limit = 200, action = '') =>
   adminGet<{ items: AuditEntry[] }>(`/api/admin/audit?limit=${limit}${action ? `&action=${encodeURIComponent(action)}` : ''}`).then((d) => d.items);
 export const adminPurge = (days: number) =>
   adminSendJson<{ before: string; deleted: Record<string, number> }>('/api/admin/purge', 'POST', { days });
+
+// ---------- Revue de contrats + playbooks (B9) ----------
+export interface PlaybookRule { label: string; instruction: string; }
+export interface Playbook { id: number; name: string; workspace_id: number | null; scope: 'perso' | 'cabinet'; rules: PlaybookRule[]; created_at?: string; }
+export const listPlaybooks = () => wsGet<{ items: Playbook[] }>('/api/playbooks').then((d) => d.items);
+export const createPlaybook = (name: string, rules: PlaybookRule[], workspace_id?: number) =>
+  wsSend<Playbook>('/api/playbooks', 'POST', { name, rules, workspace_id });
+export const deletePlaybook = (id: number) => wsSend<{ ok: boolean }>(`/api/playbooks/${id}`, 'DELETE');
+
+export interface ContractFinding { label: string; status: 'ok' | 'issue' | 'missing'; note: string; }
+export interface ContractReview {
+  task: string; playbook: string; findings: ContractFinding[];
+  summary: { total: number; ok: number; issue: number; missing: number };
+}
+export const reviewContract = (docId: number, playbookId: number) =>
+  wsSend<ContractReview>(`/api/vault/documents/${docId}/review-contract`, 'POST', { playbook_id: playbookId });

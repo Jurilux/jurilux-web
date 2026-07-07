@@ -685,6 +685,15 @@ export default function App() {
         {user && <button className="nav-item" onClick={openAlerts}>
           <span className="ico">◆</span> Alertes{alertUnseen > 0 && <span className="badge">{alertUnseen}</span>}</button>}
 
+        {/* Outils du compte : présents aussi dans le tiroir mobile, mais indispensables ici
+            car la barre latérale est la seule navigation sur desktop (le tiroir ☰ y est masqué). */}
+        {user && <>
+          <div className="side-label">Mes outils</div>
+          <a className="nav-item" href="/vault"><span className="ico">🔒</span> Vault — documents privés</a>
+          <button className="nav-item" onClick={openDraft}><span className="ico">✍️</span> Rédiger</button>
+          <button className="nav-item" onClick={openAccount}><span className="ico">⚙️</span> Mon compte</button>
+        </>}
+
         <div className="side-label">Explorer</div>
         <a className="nav-item" href="/insight"><span className="ico">⚖</span> Insight — avocats</a>
         {account?.is_admin && <a className="nav-item" href="/admin"><span className="ico">▦</span> Administration</a>}

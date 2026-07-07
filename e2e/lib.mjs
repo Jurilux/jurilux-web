@@ -92,13 +92,37 @@ export async function ask(page, q) {
   else await input.press('Enter');
 }
 
+// Le site est PRIVÉ : sur un contexte neuf, le mur d'authentification (form.auth-form) est
+// affiché d'emblée. login() remplit ce mur ; si un ancien déclencheur modal traîne, on l'ouvre.
 export async function login(page, email) {
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  const form = page.locator('form.auth-form');
+  if (!(await form.isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: /Se connecter/ }).first().click().catch(() => {});
+  }
+  await form.getByPlaceholder('vous@exemple.lu').waitFor({ state: 'visible', timeout: 8000 });
+  await form.getByPlaceholder('vous@exemple.lu').fill(email);
+  await form.getByPlaceholder('8 caractères minimum').first().fill(MDP);
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(800);
+  await dismissOnboarding(page);   // l'onboarding s'affiche APRÈS connexion (site privé) → l'écarter
+}
+
+// Inscription sur le mur : bascule en mode « Créer un compte » puis soumet.
+export async function register(page, email) {
+  await page.locator('.authwall, .modal').getByText('Créer un compte', { exact: false }).first().click().catch(() => {});
   const form = page.locator('form.auth-form');
   await form.getByPlaceholder('vous@exemple.lu').fill(email);
   await form.getByPlaceholder('8 caractères minimum').first().fill(MDP);
   await form.locator('button[type=submit]').click();
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(800);
+  await dismissOnboarding(page);   // onboarding après création de compte → l'écarter
+}
+
+// Entre dans l'app (site privé) avec un compte de démo — pour les parcours autrefois « publics ».
+export async function entrer(page, email = 'pro@demo.lu') {
+  await page.goto(FRONT, { waitUntil: 'networkidle' });
+  await login(page, email);
+  await dismissOnboarding(page);
 }
 
 // Navigue par le tiroir mobile (☰), toujours disponible quel que soit le viewport.

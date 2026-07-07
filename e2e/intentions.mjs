@@ -53,8 +53,8 @@ export const INTENTIONS = {
   'H04-admin-audit': { intention: "Consulter le journal d'audit", attendu: "L'onglet audit se charge" },
   // ── V2. Permissions & CRUD ──
   'W2-01-admin-refus-pro': { intention: "Un pro (non-admin) ouvre /admin", attendu: "Accès refusé (pas les droits admin)" },
-  'W2-02-admin-refus-anonyme': { intention: "Un anonyme ouvre /admin", attendu: "Accès réservé aux administrateurs" },
-  'W2-03-vault-refus-anonyme': { intention: "Un anonyme ouvre /vault", attendu: "Invitation à se connecter" },
+  'W2-02-admin-refus-anonyme': { intention: "Un anonyme ouvre /admin", attendu: "Renvoyé au mur d'authentification (site privé)" },
+  'W2-03-vault-refus-anonyme': { intention: "Un anonyme ouvre /vault", attendu: "Renvoyé au mur d'authentification (site privé)" },
   'W2-04-cabinet-member-sans-gestion': { intention: "Un membre simple ouvre le cabinet", attendu: "Il peut quitter mais pas supprimer/gérer" },
   'W2-05-cabinet-owner-gestion': { intention: "L'owner ouvre le cabinet", attendu: "Il peut supprimer le cabinet" },
   'W2-06-workspace-crud': { intention: "Créer puis supprimer un cabinet", attendu: "Le cabinet apparaît puis disparaît" },
@@ -108,7 +108,7 @@ export const INTENTIONS = {
   'W8-07-admin-routage-llm': { intention: "Consulter le routage LLM par sensibilité", attendu: "Le routage LLM est affiché" },
   'W8-08-corpus-info-menu': { intention: "Consulter la volumétrie du corpus", attendu: "Le nombre de décisions est affiché" },
   // ── V9. Variantes & compléments ──
-  'W9-01-anonyme-nav-restreinte': { intention: "Un anonyme regarde la navigation", attendu: "Les fonctions connectées sont masquées" },
+  'W9-01-anonyme-mur': { intention: "Un anonyme ouvre le site", attendu: "Le mur d'authentification bloque tout accès" },
   'W9-02-vault-supprimer-doc': { intention: "Supprimer un document du Vault", attendu: "Le document disparaît" },
   'W9-03-alerte-verifier': { intention: "Vérifier une alerte", attendu: "L'alerte s'ouvre (check + résultats)" },
   'W9-04-alerte-verifier-toutes': { intention: "Vérifier toutes les alertes", attendu: "La vérification globale se déclenche" },

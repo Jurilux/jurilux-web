@@ -5,7 +5,7 @@
 import { writeFileSync } from 'node:fs';
 import {
   FRONT, OUT, launch, makeRunner, voir, absent,
-  dismissOnboarding, ask, login, menuItem, ouvrirMenu, ouvrirCabinet, acteur,
+  dismissOnboarding, ask, login, register, entrer, menuItem, ouvrirMenu, ouvrirCabinet, acteur,
 } from './lib.mjs';
 import { INTENTIONS } from './intentions.mjs';
 
@@ -19,16 +19,16 @@ const accueil = async (page) => { await page.goto(FRONT, { waitUntil: 'networkid
 
 // ═══════════════ A. SERVICE & RECHERCHE (public) ═══════════════
 await journey(browser, 'A01-accueil', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await voir(page, 'Quelle question de droit');
 });
 await journey(browser, 'A02-parcours-guide', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Licenciement avec effet immédiat ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'A03-clic-question-suivi', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Faute grave ?');
   await page.locator('.followup-btn').first().waitFor({ timeout: 15000 });
   const q = await page.locator('.followup-btn').first().innerText();
@@ -36,38 +36,38 @@ await journey(browser, 'A03-clic-question-suivi', async (page) => {
   await page.locator('.bubble.user', { hasText: q.slice(0, 20) }).first().waitFor({ timeout: 8000 });
 });
 await journey(browser, 'A04-autre-angle', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Préavis de licenciement ?');
   await voir(page, 'Autre angle', { timeout: 15000 });
 });
 await journey(browser, 'A05-mode-pedagogique', async (page) => {
-  await accueil(page);
+  await entrer(page);
   const cb = page.locator('input[type=checkbox]').first();
   if (await cb.isVisible().catch(() => false)) await cb.check().catch(() => {});
   await ask(page, 'Explique la faute grave');
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'A06-filtres', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await page.locator('.filter-toggle, .filter-toggle.active').first().click().catch(() => {});
   await page.waitForTimeout(400);
   await ask(page, 'Résiliation de bail ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'A07-refus-hors-sujet', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Quelle est la météo demain à Luxembourg ?');
   await voir(page, 'Aucun document pertinent', { timeout: 15000 });
 });
 await journey(browser, 'A08-feedback-positif', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Congé parental ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
   await page.getByText('👍', { exact: false }).first().click();
   await page.waitForTimeout(500);
 });
 await journey(browser, 'A09-feedback-manquant', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Heures supplémentaires ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
   await page.getByText('👎', { exact: false }).first().click();
@@ -75,13 +75,14 @@ await journey(browser, 'A09-feedback-manquant', async (page) => {
   if (await champ.isVisible().catch(() => false)) { await champ.fill('Manque une référence jurisprudentielle.'); await page.getByRole('button', { name: 'Envoyer' }).first().click(); }
 });
 await journey(browser, 'A10-partager', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Rupture conventionnelle ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
   await page.getByRole('button', { name: /Partager/ }).first().click();
   await voir(page, 'Lien copié', { timeout: 8000 });
 });
 await journey(browser, 'A11-permalien-public', async (page) => {
+  await entrer(page);   // site privé : les permaliens exigent aussi une connexion
   await page.goto(SHARE_ID ? `${FRONT}/r/${SHARE_ID}` : FRONT, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   await voir(page, 'Jurilux');
@@ -89,12 +90,14 @@ await journey(browser, 'A11-permalien-public', async (page) => {
 
 // ═══════════════ B. INSIGHT AVOCATS (public) ═══════════════
 await journey(browser, 'B01-insight-recherche', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await voir(page, 'Insight');
   const s = page.getByPlaceholder('Rechercher un avocat…');
   if (await s.isVisible().catch(() => false)) { await s.fill('Dupont'); await page.waitForTimeout(1000); }
 });
 await journey(browser, 'B02-insight-analytics', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: /Analytics contentieux/ }).first().click().catch(() => {});
   await voir(page, 'Analytics contentieux', { timeout: 8000 });
@@ -103,12 +106,7 @@ await journey(browser, 'B02-insight-analytics', async (page) => {
 // ═══════════════ C. AUTH & COMPTE ═══════════════
 await journey(browser, 'C01-inscription', async (page) => {
   await accueil(page);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
-  const form = page.locator('form.auth-form');
-  await form.getByPlaceholder('vous@exemple.lu').fill(`e2e_${Date.now()}@demo.lu`);
-  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
-  await form.locator('button[type=submit]').click();
+  await register(page, `e2e_${Date.now()}@demo.lu`);   // inscription depuis le mur
   await voir(page, 'Plan étudiant', { timeout: 8000 });
 });
 await journey(browser, 'C02-connexion-pro', async (page) => {
@@ -117,8 +115,7 @@ await journey(browser, 'C02-connexion-pro', async (page) => {
   await voir(page, 'Plan pro', { timeout: 8000 });
 });
 await journey(browser, 'C03-mauvais-mot-de-passe', async (page) => {
-  await accueil(page);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await accueil(page);   // le mur d'authentification est déjà affiché
   const form = page.locator('form.auth-form');
   await form.getByPlaceholder('vous@exemple.lu').fill('pro@demo.lu');
   await form.getByPlaceholder('8 caractères minimum').first().fill('mauvais_mdp');
@@ -357,11 +354,11 @@ await journey(browser, 'W2-01-admin-refus-pro', async (page) => {
 });
 await journey(browser, 'W2-02-admin-refus-anonyme', async (page) => {
   await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
-  await voir(page, 'réservé aux administrateurs', { timeout: 8000 });
+  await voir(page, 'accès réservé', { timeout: 8000 });   // site privé : renvoyé au mur d'authentification
 });
 await journey(browser, 'W2-03-vault-refus-anonyme', async (page) => {
   await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
-  await voir(page, 'Connectez-vous pour utiliser votre Vault', { timeout: 8000 });
+  await voir(page, 'accès réservé', { timeout: 8000 });   // idem : le mur bloque l'accès anonyme
 });
 await journey(browser, 'W2-04-cabinet-member-sans-gestion', async (page) => {
   await accueil(page);
@@ -458,14 +455,13 @@ await journey(browser, 'W2-10-prompt-crud', async (page) => {
 // -- Validation : inscription avec mot de passe trop court --
 await journey(browser, 'W2-11-inscription-mdp-court', async (page) => {
   await accueil(page);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  await page.locator('.authwall').getByText('Créer un compte', { exact: false }).first().click().catch(() => {});
   const form = page.locator('form.auth-form');
   await form.getByPlaceholder('vous@exemple.lu').fill(`court_${Date.now()}@demo.lu`);
   await form.getByPlaceholder('8 caractères minimum').first().fill('123');
   await form.locator('button[type=submit]').click();
   await page.waitForTimeout(700);
-  // refus attendu : le formulaire reste affiché (non connecté)
+  // refus attendu : le formulaire (mur) reste affiché
   await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });
 });
 
@@ -565,14 +561,14 @@ const ouvrirFiltres = async (page) => {
 };
 
 await journey(browser, 'W4-01-filtre-type', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ouvrirFiltres(page);
   await page.getByLabel('Type').selectOption('jurisprudence').catch(() => {});
   await ask(page, 'Faute grave et licenciement ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'W4-02-filtre-annee', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ouvrirFiltres(page);
   await page.getByLabel('Année min').fill('2018').catch(() => {});
   await page.getByLabel('Année max').fill('2024').catch(() => {});
@@ -580,14 +576,14 @@ await journey(browser, 'W4-02-filtre-annee', async (page) => {
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'W4-03-filtre-juridiction', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ouvrirFiltres(page);
   await page.getByLabel('Juridiction').fill('csj_ch08').catch(() => {});
   await ask(page, 'Bail commercial ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'W4-04-refus-avec-filtre-elargir', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ouvrirFiltres(page);
   await page.getByLabel('Année min').fill('2020').catch(() => {});
   await ask(page, 'Quelle est la météo demain ?');   // hors droit → refus
@@ -610,6 +606,7 @@ await journey(browser, 'W4-06-historique-detail', async (page) => {
   await voir(page, 'faute grave', { timeout: 8000 });
 });
 await journey(browser, 'W4-07-insight-profil-avocat', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByPlaceholder('Rechercher un avocat…').fill('Dupont');
   await page.waitForTimeout(900);
@@ -617,6 +614,7 @@ await journey(browser, 'W4-07-insight-profil-avocat', async (page) => {
   await voir(page, 'Décisions', { timeout: 8000 });   // fiche avocat ouverte
 });
 await journey(browser, 'W4-08-insight-analytics-matiere', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: /Analytics contentieux/ }).first().click();
   await voir(page, 'Droit du travail', { timeout: 8000 });  // matière issue des données seedées
@@ -627,12 +625,7 @@ await journey(browser, 'W4-08-insight-analytics-matiere', async (page) => {
 // Nouveau client : inscription → question → feedback → partage, d'un seul tenant.
 await journey(browser, 'W5-01-nouveau-client-bout-en-bout', async (page) => {
   await accueil(page);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
-  const form = page.locator('form.auth-form');
-  await form.getByPlaceholder('vous@exemple.lu').fill(`client_${Date.now()}@demo.lu`);
-  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
-  await form.locator('button[type=submit]').click();
+  await register(page, `client_${Date.now()}@demo.lu`);   // inscription depuis le mur
   await voir(page, 'Plan étudiant', { timeout: 8000 });
   await ask(page, 'Dans quels cas un licenciement immédiat est-il justifié ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
@@ -841,6 +834,7 @@ await journey(browser, 'W7-04-upload-trop-gros-413', async (page) => {
 
 // ═══════════════ VAGUE 8 — INSIGHT AVANCÉ + ONGLETS ADMIN RESTANTS + CORPUS ═══════════════
 await journey(browser, 'W8-01-insight-comparer', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByPlaceholder('Rechercher un avocat…').fill('Dupont');
   await page.waitForTimeout(800);
@@ -853,6 +847,7 @@ await journey(browser, 'W8-01-insight-comparer', async (page) => {
   await voir(page, 'Comparaison', { timeout: 8000 });
 });
 await journey(browser, 'W8-02-insight-filtre-matiere', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByTitle('Filtrer par domaine').selectOption({ label: /Droit du travail/ }).catch(() => {});
   await page.waitForTimeout(800);
@@ -879,17 +874,17 @@ await journey(browser, 'W8-07-admin-routage-llm', async (page) => {
   await voir(page, 'Routage LLM', { timeout: 8000 });
 });
 await journey(browser, 'W8-08-corpus-info-menu', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ouvrirMenu(page);   // la volumétrie du corpus est dans le tiroir « Le corpus »
   await voir(page, 'décisions', { timeout: 8000 });
 });
 
 // ═══════════════ VAGUE 9 — VARIANTES DE PROFIL & COMPLÉMENTS ═══════════════
-await journey(browser, 'W9-01-anonyme-nav-restreinte', async (page) => {
-  await accueil(page);
-  await voir(page, 'Recherche', { timeout: 8000 });   // fonctions publiques présentes
-  await absent(page, 'Mon cabinet');                   // fonctions connectées absentes
-  await absent(page, 'Historique');
+await journey(browser, 'W9-01-anonyme-mur', async (page) => {
+  await page.goto(FRONT, { waitUntil: 'networkidle' });
+  await voir(page, 'accès réservé', { timeout: 8000 });   // anonyme → mur d'authentification
+  await absent(page, 'Mon cabinet');                       // aucune fonction de l'app n'est exposée
+  await absent(page, 'Quelle question de droit');
 });
 await journey(browser, 'W9-02-vault-supprimer-doc', async (page) => {
   await accueil(page);
@@ -923,19 +918,14 @@ await journey(browser, 'W9-04-alerte-verifier-toutes', async (page) => {
   await voir(page, 'bail commercial', { timeout: 8000 });
 });
 await journey(browser, 'W9-05-permalien-contenu', async (page) => {
+  await entrer(page);   // site privé : les permaliens exigent aussi une connexion
   await page.goto(SHARE_ID ? `${FRONT}/r/${SHARE_ID}` : FRONT, { waitUntil: 'networkidle' });
   await voir(page, 'Réponse partagée', { timeout: 8000 });
 });
 await journey(browser, 'W9-06-changer-mdp-succes', async (page) => {
   await accueil(page);
   const email = `switch_${Date.now()}@demo.lu`;
-  // inscription
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
-  let form = page.locator('form.auth-form');
-  await form.getByPlaceholder('vous@exemple.lu').fill(email);
-  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
-  await form.locator('button[type=submit]').click();
+  await register(page, email);   // inscription depuis le mur
   await voir(page, 'Plan étudiant', { timeout: 8000 });
   // changement réussi de mot de passe
   await menuItem(page, 'Mon compte');
@@ -948,19 +938,17 @@ await journey(browser, 'W9-06-changer-mdp-succes', async (page) => {
 // ═══════════════ VAGUE 10 — BRANCHES D'ERREUR ATTEIGNABLES + VARIANTES ═══════════════
 await journey(browser, 'W10-01-inscription-email-existant', async (page) => {
   await accueil(page);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  await page.locator('.authwall').getByText('Créer un compte', { exact: false }).first().click().catch(() => {});
   const form = page.locator('form.auth-form');
   await form.getByPlaceholder('vous@exemple.lu').fill('pro@demo.lu');   // déjà pris
   await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
   await form.locator('button[type=submit]').click();
   await page.waitForTimeout(700);
-  await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });   // refus → reste sur le formulaire
+  await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });   // refus → reste sur le mur
   await absent(page, 'Plan pro');
 });
 await journey(browser, 'W10-02-connexion-email-inconnu', async (page) => {
   await accueil(page);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
   const form = page.locator('form.auth-form');
   await form.getByPlaceholder('vous@exemple.lu').fill(`inconnu_${Date.now()}@nowhere.lu`);
   await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
@@ -1000,35 +988,32 @@ await journey(browser, 'W10-04-autoriser-non-membre', async (page) => {
 });
 await journey(browser, 'W10-05-vault-vide', async (page) => {
   await accueil(page);
-  // nouveau compte → Vault vide
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
-  const form = page.locator('form.auth-form');
-  await form.getByPlaceholder('vous@exemple.lu').fill(`vide_${Date.now()}@demo.lu`);
-  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
-  await form.locator('button[type=submit]').click();
+  await register(page, `vide_${Date.now()}@demo.lu`);   // nouveau compte → Vault vide
   await voir(page, 'Plan étudiant', { timeout: 8000 });
   await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
   await voir(page, 'Aucun document déposé', { timeout: 8000 });
 });
 await journey(browser, 'W10-06-insight-sans-resultat', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByPlaceholder('Rechercher un avocat…').fill('Zzzxxqqnobody');
   await page.waitForTimeout(900);
   await voir(page, '0 résultat', { timeout: 8000 });
 });
 await journey(browser, 'W10-07-insight-tri-recent', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByTitle('Trier').selectOption('recent');
   await voir(page, 'triés par activité récente', { timeout: 8000 });   // ligne de résultats (pas l'option)
 });
 await journey(browser, 'W10-08-insight-tri-taux', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByTitle('Trier').selectOption('winrate');
   await voir(page, 'triés par taux estimé favorable', { timeout: 8000 });
 });
 await journey(browser, 'W10-09-filtre-source-loi', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await page.locator('.filter-toggle').first().click().catch(() => {});
   await page.waitForTimeout(300);
   await page.getByLabel('Type').selectOption('law');
@@ -1036,7 +1021,7 @@ await journey(browser, 'W10-09-filtre-source-loi', async (page) => {
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'W10-10-filtres-combines', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await page.locator('.filter-toggle').first().click().catch(() => {});
   await page.waitForTimeout(300);
   await page.getByLabel('Type').selectOption('jurisprudence');
@@ -1049,12 +1034,12 @@ await journey(browser, 'W10-10-filtres-combines', async (page) => {
 
 // ═══════════════ VAGUE 11 — VARIANTES RECHERCHE / RÉPONSE / DIVERS ═══════════════
 await journey(browser, 'W11-01-exemple-preset', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await page.locator('.sugg').first().click();   // clic sur une question d'exemple
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'W11-02-conversation-multitours', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Faute grave ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
   await ask(page, 'Et le préavis alors ?');   // 2e tour (contexte conversationnel)
@@ -1063,14 +1048,14 @@ await journey(browser, 'W11-02-conversation-multitours', async (page) => {
   if (bulles < 2) throw new Error('2e tour non enregistré');
 });
 await journey(browser, 'W11-03-nouvelle-recherche-reset', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Congé parental ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
   await page.locator('.side-cta').first().click();   // « + Nouvelle recherche »
   await voir(page, 'Quelle question de droit', { timeout: 8000 });   // fil réinitialisé
 });
 await journey(browser, 'W11-04-filtre-projet-loi', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await page.locator('.filter-toggle').first().click().catch(() => {});
   await page.waitForTimeout(300);
   await page.getByLabel('Type').selectOption('projet_loi');
@@ -1078,7 +1063,7 @@ await journey(browser, 'W11-04-filtre-projet-loi', async (page) => {
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 await journey(browser, 'W11-05-feedback-pouce-bas-champ', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await ask(page, 'Heures supplémentaires ?');
   await voir(page, 'parcours guidé', { timeout: 15000 });
   await page.getByText('👎', { exact: false }).first().click();
@@ -1086,7 +1071,7 @@ await journey(browser, 'W11-05-feedback-pouce-bas-champ', async (page) => {
   await page.getByPlaceholder("Qu'est-ce qui manquait ?").waitFor({ state: 'visible', timeout: 5000 });
 });
 await journey(browser, 'W11-06-mentions-legales', async (page) => {
-  await accueil(page);
+  await entrer(page);
   await page.locator('.side-legal').first().click().catch(() => {});
   await page.waitForTimeout(800);
   await voir(page, /Mentions|confidentialité|données/, { timeout: 8000 });
@@ -1140,6 +1125,7 @@ await journey(browser, 'W12-04-vault-ask-hybride-suite', async (page) => {
 
 // ═══════════════ VAGUE 13 — INSIGHT EN PROFONDEUR ═══════════════
 const ouvrirProfil = async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByPlaceholder('Rechercher un avocat…').fill('Dupont');
   await page.waitForTimeout(800);
@@ -1163,6 +1149,7 @@ await journey(browser, 'W13-04-profil-juridiction', async (page) => {
   await voir(page, 'Répartition par juridiction', { timeout: 8000 });
 });
 await journey(browser, 'W13-05-analytics-taux', async (page) => {
+  await entrer(page);   // site privé : entrer avant d'accéder à Insight
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: /Analytics contentieux/ }).first().click();
   await voir(page, 'Taux', { timeout: 8000 });   // colonne taux de succès estimé

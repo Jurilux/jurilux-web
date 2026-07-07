@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { AuthGate } from './AuthGate';
 import './styles.css';
 
 // Backoffice et vue partagée sont chargés à la demande (code splitting) : un visiteur
@@ -25,8 +26,11 @@ const route = isAdmin ? <AdminApp />
   : shareMatch ? <SharedView id={shareMatch[1]} />
   : <App />;
 
+// Tout le site est privé : AuthGate impose une connexion avant de rendre le moindre écran.
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Suspense fallback={<div className="route-loading">Chargement…</div>}>{route}</Suspense>
+    <Suspense fallback={<div className="route-loading">Chargement…</div>}>
+      <AuthGate>{route}</AuthGate>
+    </Suspense>
   </React.StrictMode>,
 );

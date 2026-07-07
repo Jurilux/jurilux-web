@@ -568,7 +568,9 @@ export default function App() {
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
   const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
   const openHistory = async () => { setMenuOpen(false); setHistOpen(true); setHistory(await getHistory()); };
-  const doLogout = async () => { await logout(); setUser(null); setAccount(null); setHistOpen(false); setMenuOpen(false); };
+  // Déconnexion : on recharge sur l'accueil pour que le mur d'authentification reprenne la main
+  // (le site étant privé, aucun écran ne doit rester visible une fois déconnecté).
+  const doLogout = async () => { await logout(); window.location.href = '/'; };
   const [filters, setFilters] = useState<SearchFilters>({});
   const [showFilters, setShowFilters] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);

@@ -698,6 +698,146 @@ await journey(browser, 'W5-03-cloison-bout-en-bout', async (page) => {
   } finally { await asso.ctx.close(); }
 });
 
+// ═══════════════ VAGUE 6 — SOUS-ACTIONS BACKOFFICE ADMIN ═══════════════
+const admin = async (page, onglet) => {
+  await accueil(page);
+  await login(page, 'admin@demo.lu');
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  if (onglet) { await page.getByRole('button', { name: new RegExp(onglet, 'i') }).first().click(); await page.waitForTimeout(500); }
+};
+
+await journey(browser, 'W6-01-admin-changer-plan', async (page) => {
+  await admin(page, 'Utilisateurs');
+  const sel = page.locator('tr', { hasText: 'dupont.collab@demo.lu' }).locator('select.cell-select');
+  await sel.selectOption('pro');
+  await page.waitForTimeout(500);
+  if ((await sel.inputValue()) !== 'pro') throw new Error('plan non appliqué');
+  await sel.selectOption('student');   // on remet en état
+});
+await journey(browser, 'W6-02-admin-toggle-admin', async (page) => {
+  await admin(page, 'Utilisateurs');
+  const row = page.locator('tr', { hasText: 'dupont.collab@demo.lu' });
+  const cb = row.locator('input[type=checkbox]');
+  const avant = await cb.isChecked();
+  await cb.click();
+  await page.waitForTimeout(500);
+  if ((await cb.isChecked()) === avant) throw new Error('bascule admin sans effet');
+  await cb.click();   // remettre en état
+});
+await journey(browser, 'W6-03-admin-inspecteur-probe', async (page) => {
+  await admin(page, 'Inspecteur');
+  await page.getByPlaceholder(/Ex : conséquences/).fill('faute grave licenciement');
+  await page.getByRole('button', { name: 'Inspecter' }).first().click();
+  await voir(page, 'CSJ', { timeout: 10000 });   // extraits stubés remontés
+});
+await journey(browser, 'W6-04-admin-banc-eval', async (page) => {
+  await admin(page, 'Banc de test');
+  await page.getByRole('button', { name: /Lancer le banc de test/ }).first().click();
+  await voir(page, 'Question de référence', { timeout: 12000 });
+});
+await journey(browser, 'W6-05-admin-config-patch', async (page) => {
+  await admin(page, 'Paramétrage');
+  const row = page.locator('.bar-row').first();
+  await row.locator('input').first().fill('42');
+  await row.getByRole('button').first().click();
+  await voir(page, 'appliqué', { timeout: 8000 });
+});
+await journey(browser, 'W6-06-admin-supprimer-user', async (page) => {
+  // compte jetable créé via une requête navigateur (proxy Vite → backend)
+  const email = `jetable_${Date.now()}@demo.lu`;
+  await page.request.post(`${FRONT}/api/auth/register`, { data: { email, password: 'password123' } });
+  await admin(page, 'Utilisateurs');
+  await voir(page, email, { timeout: 8000 });
+  await page.locator('tr', { hasText: email }).getByRole('button', { name: 'Supprimer' }).click();
+  await page.waitForTimeout(700);
+  await absent(page, email);
+});
+
+// ═══════════════ VAGUE 7 — DESTRUCTIFS CONFIRMÉS & BRANCHES D'ERREUR ═══════════════
+
+// Créer un cabinet jetable, y ajouter un dossier, puis SUPPRIMER le dossier.
+await journey(browser, 'W7-01-supprimer-dossier', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  const nom = `Espace ${Date.now()}`, doss = `Pièce ${Date.now()}`;   // noms non chevauchants
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.getByPlaceholder(/Nouveau dossier/).fill(doss);
+  await page.getByRole('button', { name: 'Créer', exact: true }).last().click();
+  await voir(page, doss, { timeout: 8000 });
+  await page.getByTitle('Supprimer le dossier').first().click();   // confirm auto-accepté
+  await page.locator('.cab-row, .dossier-row').filter({ hasText: doss }).first()
+    .waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(600);
+  await absent(page, doss);
+});
+
+// Un membre QUITTE un cabinet (autre session) → il disparaît de sa liste.
+await journey(browser, 'W7-02-quitter-cabinet', async (page) => {
+  const nom = `Quit ${Date.now()}`;
+  await accueil(page);
+  await login(page, 'weber.owner@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.getByPlaceholder("email d'un membre inscrit").fill('etudiant@demo.lu');
+  await page.getByRole('button', { name: 'Inviter' }).first().click();
+  await voir(page, 'etudiant@demo.lu', { timeout: 8000 });
+  const { ctx, p } = await acteur(page.context().browser(), 'etudiant@demo.lu');
+  try {
+    await ouvrirCabinet(p, nom);
+    await p.getByRole('button', { name: 'Quitter' }).first().click();   // confirm auto
+    await p.waitForTimeout(700);
+    await absent(p, nom);   // le cabinet a disparu de sa liste
+  } finally { await ctx.close(); }
+});
+
+// Révocation d'accès : après avoir autorisé puis RÉVOQUÉ, l'associé ne voit plus le dossier.
+await journey(browser, 'W7-03-revoquer-acces', async (page) => {
+  const nom = `Rev ${Date.now()}`, sec = `Sec ${Date.now()}`;
+  await accueil(page);
+  await login(page, 'weber.owner@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.getByPlaceholder("email d'un membre inscrit").fill('dupont.associe@demo.lu');
+  await page.getByRole('button', { name: 'Inviter' }).first().click();
+  await page.waitForTimeout(400);
+  await page.getByPlaceholder(/Nouveau dossier/).fill(sec);
+  await page.getByRole('button', { name: 'Créer', exact: true }).last().click();
+  await voir(page, sec, { timeout: 8000 });
+  await page.getByRole('button', { name: 'Restreindre' }).first().click();
+  await page.getByPlaceholder('Autoriser un membre (email)').fill('dupont.associe@demo.lu');
+  await page.getByRole('button', { name: 'Autoriser' }).first().click();
+  await page.waitForTimeout(500);
+  await page.getByRole('button', { name: 'Révoquer' }).first().click();   // révocation
+  await page.waitForTimeout(600);
+  // vérif : l'associé (autre session) ne voit plus le dossier
+  const { ctx, p } = await acteur(page.context().browser(), 'dupont.associe@demo.lu');
+  try {
+    await ouvrirCabinet(p, nom);
+    await absent(p, sec);
+  } finally { await ctx.close(); }
+});
+
+// Upload d'un fichier trop volumineux → 413 remonté à l'utilisateur.
+await journey(browser, 'W7-04-upload-trop-gros-413', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'Mes documents', { timeout: 8000 });
+  const gros = Buffer.alloc(26 * 1024 * 1024, 97);   // 26 Mo > limite 25 Mo
+  await page.locator('input[type=file]').first().setInputFiles(
+    { name: 'enorme.txt', mimeType: 'text/plain', buffer: gros }, { timeout: 30000 });
+  // dépôt rejeté (413 côté backend ; le proxy Vite le remonte en 500 en dev — Caddy renvoie
+  // bien 413 en prod). Dans les deux cas, une erreur de dépôt s'affiche.
+  await voir(page, /trop volumineux|dépôt a échoué/, { timeout: 15000 });
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

@@ -838,6 +838,119 @@ await journey(browser, 'W7-04-upload-trop-gros-413', async (page) => {
   await voir(page, /trop volumineux|dépôt a échoué/, { timeout: 15000 });
 });
 
+// ═══════════════ VAGUE 8 — INSIGHT AVANCÉ + ONGLETS ADMIN RESTANTS + CORPUS ═══════════════
+await journey(browser, 'W8-01-insight-comparer', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Dupont');
+  await page.waitForTimeout(800);
+  await page.locator('.lw-row').first().click();
+  await voir(page, 'Décisions', { timeout: 8000 });
+  await page.getByRole('button', { name: /Comparer/ }).first().click();
+  const pick = page.locator('.insight-picker .lw-row-simple, .insight-picker .lw-row').first();
+  await pick.waitFor({ state: 'visible', timeout: 8000 });
+  await pick.click();
+  await voir(page, 'Comparaison', { timeout: 8000 });
+});
+await journey(browser, 'W8-02-insight-filtre-matiere', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByTitle('Filtrer par domaine').selectOption({ label: /Droit du travail/ }).catch(() => {});
+  await page.waitForTimeout(800);
+  await voir(page, 'Dupont', { timeout: 8000 });   // avocat de la matière reste listé
+});
+await journey(browser, 'W8-03-admin-questions', async (page) => {
+  await admin(page, 'Questions');
+  await voir(page, 'faute grave', { timeout: 8000 });   // question seedée de l'étudiant
+});
+await journey(browser, 'W8-04-admin-retours', async (page) => {
+  await admin(page, 'Retours');
+  await voir(page, 'Retours des utilisateurs', { timeout: 8000 });
+});
+await journey(browser, 'W8-05-admin-corpus', async (page) => {
+  await admin(page, 'Corpus');
+  await voir(page, 'Corpus indexé', { timeout: 8000 });
+});
+await journey(browser, 'W8-06-admin-activite', async (page) => {
+  await admin(page, 'Tableau de bord');   // le graphe d'activité est sur le tableau de bord
+  await voir(page, 'questions par jour', { timeout: 8000 });
+});
+await journey(browser, 'W8-07-admin-routage-llm', async (page) => {
+  await admin(page, 'Santé');
+  await voir(page, 'Routage LLM', { timeout: 8000 });
+});
+await journey(browser, 'W8-08-corpus-info-menu', async (page) => {
+  await accueil(page);
+  await ouvrirMenu(page);   // la volumétrie du corpus est dans le tiroir « Le corpus »
+  await voir(page, 'décisions', { timeout: 8000 });
+});
+
+// ═══════════════ VAGUE 9 — VARIANTES DE PROFIL & COMPLÉMENTS ═══════════════
+await journey(browser, 'W9-01-anonyme-nav-restreinte', async (page) => {
+  await accueil(page);
+  await voir(page, 'Recherche', { timeout: 8000 });   // fonctions publiques présentes
+  await absent(page, 'Mon cabinet');                   // fonctions connectées absentes
+  await absent(page, 'Historique');
+});
+await journey(browser, 'W9-02-vault-supprimer-doc', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  const nom = `jetable_${Date.now()}.txt`;
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: nom, mimeType: 'text/plain', buffer: Buffer.from('doc a supprimer') });
+  await voir(page, nom.slice(0, 12), { timeout: 8000 });
+  await page.locator('tr', { hasText: nom.slice(0, 12) }).getByRole('button', { name: 'Supprimer' }).click();
+  await page.waitForTimeout(700);
+  await absent(page, nom.slice(0, 12));
+});
+await journey(browser, 'W9-03-alerte-verifier', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Alertes');
+  await voir(page, 'bail commercial', { timeout: 8000 });
+  await page.locator('.hist-item').filter({ hasText: 'bail commercial' }).first().click();
+  await page.waitForTimeout(1000);   // ouverture = check + hits + marquage lu
+});
+await journey(browser, 'W9-04-alerte-verifier-toutes', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Alertes');
+  await page.getByRole('button', { name: /Vérifier toutes/ }).first().click();
+  await page.waitForTimeout(1000);
+  await voir(page, 'bail commercial', { timeout: 8000 });
+});
+await journey(browser, 'W9-05-permalien-contenu', async (page) => {
+  await page.goto(SHARE_ID ? `${FRONT}/r/${SHARE_ID}` : FRONT, { waitUntil: 'networkidle' });
+  await voir(page, 'Réponse partagée', { timeout: 8000 });
+});
+await journey(browser, 'W9-06-changer-mdp-succes', async (page) => {
+  await accueil(page);
+  const email = `switch_${Date.now()}@demo.lu`;
+  // inscription
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  let form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(email);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
+  await form.locator('button[type=submit]').click();
+  await voir(page, 'Plan étudiant', { timeout: 8000 });
+  // changement réussi de mot de passe
+  await menuItem(page, 'Mon compte');
+  await page.getByPlaceholder('Mot de passe actuel').fill('password123');
+  await page.getByPlaceholder('Nouveau mot de passe (≥ 8 caractères)').fill('nouveaumotdepasse');
+  await page.getByRole('button', { name: 'Changer' }).first().click();
+  await page.waitForTimeout(800);
+  // déconnexion puis reconnexion avec le NOUVEAU mot de passe
+  await ouvrirMenu(page);
+  await page.locator('.nav-drawer').getByRole('button', { name: 'Déconnexion' }).click().catch(() => {});
+  await page.waitForTimeout(600);
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(email);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('nouveaumotdepasse');
+  await form.locator('button[type=submit]').click();
+  await voir(page, 'Plan étudiant', { timeout: 8000 });   // reconnecté avec le nouveau mdp
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

@@ -1046,6 +1046,97 @@ await journey(browser, 'W10-10-filtres-combines', async (page) => {
   await voir(page, 'parcours guidé', { timeout: 15000 });
 });
 
+// ═══════════════ VAGUE 11 — VARIANTES RECHERCHE / RÉPONSE / DIVERS ═══════════════
+await journey(browser, 'W11-01-exemple-preset', async (page) => {
+  await accueil(page);
+  await page.locator('.sugg').first().click();   // clic sur une question d'exemple
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'W11-02-conversation-multitours', async (page) => {
+  await accueil(page);
+  await ask(page, 'Faute grave ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await ask(page, 'Et le préavis alors ?');   // 2e tour (contexte conversationnel)
+  await page.waitForTimeout(1500);
+  const bulles = await page.locator('.bubble.user').count();
+  if (bulles < 2) throw new Error('2e tour non enregistré');
+});
+await journey(browser, 'W11-03-nouvelle-recherche-reset', async (page) => {
+  await accueil(page);
+  await ask(page, 'Congé parental ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.locator('.side-cta').first().click();   // « + Nouvelle recherche »
+  await voir(page, 'Quelle question de droit', { timeout: 8000 });   // fil réinitialisé
+});
+await journey(browser, 'W11-04-filtre-projet-loi', async (page) => {
+  await accueil(page);
+  await page.locator('.filter-toggle').first().click().catch(() => {});
+  await page.waitForTimeout(300);
+  await page.getByLabel('Type').selectOption('projet_loi');
+  await ask(page, 'Projets de loi sur le travail ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'W11-05-feedback-pouce-bas-champ', async (page) => {
+  await accueil(page);
+  await ask(page, 'Heures supplémentaires ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByText('👎', { exact: false }).first().click();
+  // le champ de précision (placeholder, pas du texte) apparaît
+  await page.getByPlaceholder("Qu'est-ce qui manquait ?").waitFor({ state: 'visible', timeout: 5000 });
+});
+await journey(browser, 'W11-06-mentions-legales', async (page) => {
+  await accueil(page);
+  await page.locator('.side-legal').first().click().catch(() => {});
+  await page.waitForTimeout(800);
+  await voir(page, /Mentions|confidentialité|données/, { timeout: 8000 });
+});
+
+// ═══════════════ VAGUE 12 — VAULT EN PROFONDEUR ═══════════════
+const vaultPro2 = async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'Mes documents', { timeout: 8000 });
+};
+await journey(browser, 'W12-01-chronologie-datee', async (page) => {
+  await vaultPro2(page);
+  const nom = `chrono_${Date.now()}.txt`;
+  await page.locator('input[type=file]').first().setInputFiles({ name: nom, mimeType: 'text/plain',
+    buffer: Buffer.from('Le 12 mars 2019, signature du contrat. Le 5 avril 2020, résiliation notifiée.') });
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('tr', { hasText: nom }).getByRole('button', { name: 'Analyser' }).click();
+  await page.getByRole('button', { name: 'Chronologie' }).first().click();
+  await voir(page, '2019', { timeout: 10000 });   // chronologie déterministe non vide
+});
+await journey(browser, 'W12-02-supprimer-playbook', async (page) => {
+  await vaultPro2(page);
+  const nom = `PBsuppr ${Date.now()}`;
+  await page.getByPlaceholder('Nom du playbook (ex : NDA standard)').fill(nom);
+  await page.getByPlaceholder('Intitulé (ex : clause de confidentialité)').first().fill('Règle');
+  await page.getByPlaceholder('Ce qui doit être vérifié').first().fill('Vérifier la règle.');
+  await page.getByRole('button', { name: /Créer le playbook/ }).first().click();
+  const ligne = page.locator('.cab-row').filter({ hasText: nom });
+  await ligne.first().waitFor({ state: 'visible', timeout: 12000 });
+  await ligne.getByRole('button', { name: 'Supprimer' }).click();   // confirm auto
+  await ligne.first().waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+  await absent(page, nom);
+});
+await journey(browser, 'W12-03-comparer-3-docs', async (page) => {
+  await vaultPro2(page);
+  const cases = page.locator('table input[type=checkbox]');
+  for (let i = 0; i < 3; i++) await cases.nth(i).check().catch(() => {});
+  await page.getByRole('button', { name: /Comparer en tableau/ }).first().click();
+  await voir(page, 'Comparaison', { timeout: 8000 });
+});
+await journey(browser, 'W12-04-vault-ask-hybride-suite', async (page) => {
+  await vaultPro2(page);
+  await page.getByText('Inclure le corpus public', { exact: false }).first().click().catch(() => {});
+  await page.getByPlaceholder(/quels sont les délais/).fill('Quel est le préavis selon mes docs et la loi ?');
+  await page.getByRole('button', { name: 'Demander' }).first().click();
+  await page.waitForTimeout(1800);   // réponse hybride (docs privés + corpus public)
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

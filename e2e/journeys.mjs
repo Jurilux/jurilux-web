@@ -5,7 +5,7 @@
 import { writeFileSync } from 'node:fs';
 import {
   FRONT, OUT, launch, makeRunner, voir, absent,
-  dismissOnboarding, ask, login, menuItem, ouvrirMenu, ouvrirCabinet,
+  dismissOnboarding, ask, login, menuItem, ouvrirMenu, ouvrirCabinet, acteur,
 } from './lib.mjs';
 
 const SHARE_ID = process.env.SHARE_ID || '';
@@ -555,6 +555,147 @@ await journey(browser, 'W3-08-vault-revue-contrat', async (page) => {
   await selects.nth(1).selectOption({ index: 1 }).catch(() => {});
   await page.getByRole('button', { name: 'Analyser' }).last().click();
   await voir(page, /conforme|à revoir|absent/, { timeout: 12000 });
+});
+
+// ═══════════════ VAGUE 4 — RECHERCHE (filtres/refus), SAUVEGARDE, HISTORIQUE, INSIGHT ═══════════════
+const ouvrirFiltres = async (page) => {
+  await page.locator('.filter-toggle').first().click().catch(() => {});
+  await page.waitForTimeout(300);
+};
+
+await journey(browser, 'W4-01-filtre-type', async (page) => {
+  await accueil(page);
+  await ouvrirFiltres(page);
+  await page.getByLabel('Type').selectOption('jurisprudence').catch(() => {});
+  await ask(page, 'Faute grave et licenciement ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'W4-02-filtre-annee', async (page) => {
+  await accueil(page);
+  await ouvrirFiltres(page);
+  await page.getByLabel('Année min').fill('2018').catch(() => {});
+  await page.getByLabel('Année max').fill('2024').catch(() => {});
+  await ask(page, 'Préavis de licenciement ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'W4-03-filtre-juridiction', async (page) => {
+  await accueil(page);
+  await ouvrirFiltres(page);
+  await page.getByLabel('Juridiction').fill('csj_ch08').catch(() => {});
+  await ask(page, 'Bail commercial ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'W4-04-refus-avec-filtre-elargir', async (page) => {
+  await accueil(page);
+  await ouvrirFiltres(page);
+  await page.getByLabel('Année min').fill('2020').catch(() => {});
+  await ask(page, 'Quelle est la météo demain ?');   // hors droit → refus
+  await voir(page, 'Aucun document pertinent', { timeout: 15000 });
+  // le bouton « Élargir — retirer les filtres » doit être proposé (des filtres sont actifs)
+  await voir(page, 'Élargir', { timeout: 5000 });
+});
+await journey(browser, 'W4-05-sauver-dans-dossier', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await ask(page, 'Faute grave ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByTitle('Ranger dans un dossier').first().click();
+  await voir(page, 'Enregistrer dans un dossier', { timeout: 8000 });
+});
+await journey(browser, 'W4-06-historique-detail', async (page) => {
+  await accueil(page);
+  await login(page, 'etudiant@demo.lu');   // 3 questions seedées
+  await menuItem(page, 'Historique');
+  await voir(page, 'faute grave', { timeout: 8000 });
+});
+await journey(browser, 'W4-07-insight-profil-avocat', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Dupont');
+  await page.waitForTimeout(900);
+  await page.locator('.lw-row').first().click();
+  await voir(page, 'Décisions', { timeout: 8000 });   // fiche avocat ouverte
+});
+await journey(browser, 'W4-08-insight-analytics-matiere', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Analytics contentieux/ }).first().click();
+  await voir(page, 'Droit du travail', { timeout: 8000 });  // matière issue des données seedées
+});
+
+// ═══════════════ VAGUE 5 — PARCOURS MULTI-ACTEURS BOUT-EN-BOUT ═══════════════
+
+// Nouveau client : inscription → question → feedback → partage, d'un seul tenant.
+await journey(browser, 'W5-01-nouveau-client-bout-en-bout', async (page) => {
+  await accueil(page);
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(`client_${Date.now()}@demo.lu`);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
+  await form.locator('button[type=submit]').click();
+  await voir(page, 'Plan étudiant', { timeout: 8000 });
+  await ask(page, 'Dans quels cas un licenciement immédiat est-il justifié ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByText('👍', { exact: false }).first().click();
+  await page.getByRole('button', { name: /Partager/ }).first().click();
+  await voir(page, 'Lien copié', { timeout: 8000 });
+});
+
+// Collaboration : l'owner crée un cabinet et invite un membre ; le membre (autre session) le voit.
+await journey(browser, 'W5-02-collaboration-cabinet', async (page) => {
+  const nom = `Collab ${Date.now()}`;
+  await accueil(page);
+  await login(page, 'weber.owner@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.getByPlaceholder("email d'un membre inscrit").fill('etudiant@demo.lu');
+  await page.getByRole('button', { name: 'Inviter' }).first().click();
+  await voir(page, 'etudiant@demo.lu', { timeout: 8000 });
+  // acteur B : l'étudiant, dans SA session, voit le cabinet partagé
+  const { ctx, p } = await acteur(page.context().browser(), 'etudiant@demo.lu');
+  try {
+    await ouvrirCabinet(p, nom);
+    await voir(p, nom, { timeout: 8000 });
+  } finally { await ctx.close(); }
+});
+
+// Cloison déontologique bout-en-bout : owner restreint + autorise un seul membre ;
+// le collaborateur non autorisé NE voit PAS le dossier, l'associé autorisé LE voit.
+await journey(browser, 'W5-03-cloison-bout-en-bout', async (page) => {
+  const nom = `Cloison ${Date.now()}`;
+  const secret = `Secret ${Date.now()}`;
+  await accueil(page);
+  await login(page, 'weber.owner@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  for (const em of ['dupont.collab@demo.lu', 'dupont.associe@demo.lu']) {
+    await page.getByPlaceholder("email d'un membre inscrit").fill(em);
+    await page.getByRole('button', { name: 'Inviter' }).first().click();
+    await page.waitForTimeout(400);
+  }
+  await page.getByPlaceholder(/Nouveau dossier/).fill(secret);
+  await page.getByRole('button', { name: 'Créer', exact: true }).last().click();
+  await voir(page, secret, { timeout: 8000 });
+  // restreindre + autoriser uniquement l'associé
+  await page.getByRole('button', { name: 'Restreindre' }).first().click();
+  await page.getByPlaceholder('Autoriser un membre (email)').fill('dupont.associe@demo.lu');
+  await page.getByRole('button', { name: 'Autoriser' }).first().click();
+  await page.waitForTimeout(600);
+  // acteur B : le collaborateur NON autorisé ne voit pas le dossier secret
+  const collab = await acteur(page.context().browser(), 'dupont.collab@demo.lu');
+  try {
+    await ouvrirCabinet(collab.p, nom);
+    await absent(collab.p, secret);
+  } finally { await collab.ctx.close(); }
+  // acteur C : l'associé autorisé le voit
+  const asso = await acteur(page.context().browser(), 'dupont.associe@demo.lu');
+  try {
+    await ouvrirCabinet(asso.p, nom);
+    await voir(asso.p, secret, { timeout: 8000 });
+  } finally { await asso.ctx.close(); }
 });
 
 await browser.close();

@@ -104,6 +104,22 @@ export async function menuItem(page, texte) {
   await page.waitForTimeout(700);
 }
 
+// Ouvre un SECOND acteur (contexte + page isolés) déjà connecté — pour les parcours
+// multi-acteurs (owner + membre, cloison A/B…). L'appelant doit fermer ctx en fin de parcours.
+export async function acteur(browser, email) {
+  const ctx = await browser.newContext({
+    viewport: { width: 1180, height: 900 },
+    permissions: ['clipboard-read', 'clipboard-write'],
+  });
+  const p = await ctx.newPage();
+  p.setDefaultTimeout(8000);
+  p.on('dialog', (d) => d.accept().catch(() => {}));
+  await p.goto(FRONT, { waitUntil: 'networkidle' });
+  await dismissOnboarding(p);
+  await login(p, email);
+  return { ctx, p };
+}
+
 // ---- moteur d'un parcours ----
 export function makeRunner(results) {
   return async function journey(browser, name, fn) {

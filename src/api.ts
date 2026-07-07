@@ -622,3 +622,21 @@ export interface ContractReview {
 }
 export const reviewContract = (docId: number, playbookId: number) =>
   wsSend<ContractReview>(`/api/vault/documents/${docId}/review-contract`, 'POST', { playbook_id: playbookId });
+
+// ---------- SSO entreprise (OIDC) ----------
+// Le front n'affiche le bouton « Se connecter via le SSO du cabinet » que si activé.
+export const oidcEnabled = async (): Promise<boolean> => {
+  try { return (await (await fetch('/api/auth/oidc/enabled')).json()).enabled === true; }
+  catch { return false; }
+};
+// Démarre le flux : redirige le navigateur vers l'IdP (qui reviendra sur le callback backend).
+export const oidcLogin = (): void => { window.location.href = '/api/auth/oidc/login'; };
+// Au retour, le backend place le jeton en fragment (#token=...) : à capter côté app au boot.
+export function captureOidcToken(): string | null {
+  const m = window.location.hash.match(/[#&]token=([^&]+)/);
+  if (!m) return null;
+  const token = decodeURIComponent(m[1]);
+  localStorage.setItem(TOKEN_KEY, token);
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+  return token;
+}

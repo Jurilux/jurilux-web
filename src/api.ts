@@ -475,3 +475,134 @@ export const adminDeleteUser = (id: number) =>
 export async function adminLogin(email: string, password: string): Promise<void> {
   await login(email, password);
 }
+
+// ============================================================================
+//  Nouvelles capacités backend (Vault, souveraineté, socle on-prem, concurrence)
+// ============================================================================
+
+// Variante de adminSend qui renvoie le corps JSON (purge, config…).
+async function adminSendJson<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+  return (await res.json().catch(() => ({}))) as T;
+}
+
+// ---------- Vault : documents privés du cabinet ----------
+export interface VaultDoc {
+  id: number; filename: string; mime: string | null;
+  status: 'indexing' | 'ready' | 'error'; n_chunks: number; created_at: string;
+}
+export const listVaultDocs = () =>
+  wsGet<{ items: VaultDoc[] }>('/api/vault/documents').then((d) => d.items);
+export const deleteVaultDoc = (id: number) =>
+  wsSend<{ ok: boolean }>(`/api/vault/documents/${id}`, 'DELETE');
+
+// Dépôt : corps brut + nom via query. Accepte un File (drag&drop) ou du texte.
+export async function vaultUpload(file: File | Blob, filename: string): Promise<VaultDoc> {
+  const res = await fetch(`/api/vault/documents?filename=${encodeURIComponent(filename)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': (file as File).type || 'application/octet-stream', ...authHeaders() },
+    body: file,
+  });
+  if (!res.ok) throw new HttpError(res.status, `Le dépôt a échoué (HTTP ${res.status}).`);
+  return (await res.json()) as VaultDoc;
+}
+
+// Q&A sur le Vault (isolé) ; include_corpus = hybride privé + corpus public officiel.
+export const vaultAsk = (q: string, opts: { doc_ids?: number[]; topK?: number; include_corpus?: boolean } = {}) =>
+  wsSend<AskResponse>('/api/vault/ask', 'POST', { q, ...opts });
+
+// Analyses d'un document déposé.
+export interface CitationCheck { ref: string; verified: boolean; doc_id: string | null; source_type: string | null; }
+export interface VaultStructure {
+  lawyers: { name: string; side: string | null }[];
+  matter: string | null; outcome: string | null; amounts: string[]; references: string[];
+}
+export interface TimelineEvent { date: string; contexte: string; }
+const vaultAnalyze = <T>(id: number, task: string) =>
+  wsSend<T>(`/api/vault/documents/${id}/analyze`, 'POST', { task });
+export const vaultCitations = (id: number) =>
+  vaultAnalyze<{ task: string; references: CitationCheck[]; verified: number; total: number }>(id, 'citations');
+export const vaultExtract = (id: number) => vaultAnalyze<{ task: string } & VaultStructure>(id, 'extract');
+export const vaultSummary = (id: number) => vaultAnalyze<{ task: string; summary: string }>(id, 'summary');
+export const vaultCounter = (id: number) =>
+  vaultAnalyze<{ task: string; answer: string | null; refused: boolean; citations: Citation[] }>(id, 'counter');
+export const vaultTimeline = (id: number) => vaultAnalyze<{ task: string; events: TimelineEvent[] }>(id, 'timeline');
+
+// Revue tabulaire : 1 document = 1 ligne, colonnes extraites.
+export interface VaultReviewRow extends VaultStructure { doc_id: number; filename: string; }
+export const vaultReview = (docIds: number[]) =>
+  wsSend<{ columns: string[]; rows: VaultReviewRow[] }>('/api/vault/review', 'POST', { doc_ids: docIds });
+
+// ---------- Rédaction assistée sourcée (draft) ----------
+export const draft = (instruction: string, topK = 12, filters: SearchFilters = {}) =>
+  wsSend<{ answer: string | null; refused: boolean; citations: Citation[] }>(
+    '/api/draft', 'POST', { instruction, topK, filters });
+
+// ---------- Analytics contentieux (public) ----------
+export interface AnalyticsRow { cle: string | number; cases: number; decided: number; won: number; win_rate: number | null; }
+export interface Analytics {
+  overall: { cases: number; decided: number; won: number; win_rate: number | null; lawyers: number };
+  by_matter: AnalyticsRow[]; by_juridiction: AnalyticsRow[]; by_year: AnalyticsRow[];
+}
+export const insightAnalytics = (matter = '', juridiction = '') =>
+  adminGet<Analytics>('/api/insight/analytics'
+    + `${matter ? `?matter=${encodeURIComponent(matter)}` : ''}`
+    + `${juridiction ? `${matter ? '&' : '?'}juridiction=${encodeURIComponent(juridiction)}` : ''}`);
+
+// ---------- Bibliothèque de prompts ----------
+export interface Prompt { id: number; title: string; body: string; workspace_id: number | null; scope: 'perso' | 'cabinet'; created_at?: string; }
+export const listPrompts = () => wsGet<{ items: Prompt[] }>('/api/prompts').then((d) => d.items);
+export const createPrompt = (title: string, body: string, workspace_id?: number) =>
+  wsSend<Prompt>('/api/prompts', 'POST', { title, body, workspace_id });
+export const deletePrompt = (id: number) => wsSend<{ ok: boolean }>(`/api/prompts/${id}`, 'DELETE');
+
+// ---------- Clés d'API de service ----------
+export interface ApiKey { id: number; name: string; prefix: string; created_at: string; last_used_at: string | null; revoked: boolean; }
+export interface ApiKeyCreated { id: number; name: string; prefix: string; key: string; }
+export const listApiKeys = () => wsGet<{ items: ApiKey[] }>('/api/keys').then((d) => d.items);
+export const createApiKey = (name: string) => wsSend<ApiKeyCreated>('/api/keys', 'POST', { name });
+export const revokeApiKey = (id: number) => wsSend<{ ok: boolean }>(`/api/keys/${id}`, 'DELETE');
+
+// ---------- Export RGPD (portabilité) ----------
+export const exportMyData = () => wsGet<Record<string, unknown>>('/api/me/export');
+
+// ---------- Cloisons déontologiques (dossiers restreints) ----------
+export const restrictDossier = (did: number, restricted: boolean) =>
+  wsSend<{ ok: boolean; restricted: boolean }>(`/api/dossiers/${did}/restrict`, 'POST', { restricted });
+export const grantDossierAccess = (did: number, email: string) =>
+  wsSend<{ ok: boolean; user_id: number }>(`/api/dossiers/${did}/access`, 'POST', { email });
+export const revokeDossierAccess = (did: number, uid: number) =>
+  wsSend<{ ok: boolean }>(`/api/dossiers/${did}/access/${uid}`, 'DELETE');
+
+// ---------- Backoffice : routage LLM, santé détaillée, config runtime, audit, purge ----------
+export interface LlmRouting {
+  public: { fournisseur: string; modele: string };
+  confidentiel: { fournisseur: string; modele: string };
+}
+export const adminLlm = () => adminGet<LlmRouting>('/api/admin/llm');
+
+export interface AdminHealth {
+  meilisearch: boolean; llm_configured: boolean; llm_routing: LlmRouting;
+  index: { documents: number | null; is_indexing: boolean | null };
+  counts: Record<string, number>; metrics: AdminOverview['metrics'];
+}
+export const adminHealth = () => adminGet<AdminHealth>('/api/admin/health');
+
+export const adminGetConfig = () =>
+  adminGet<{ config: Record<string, unknown>; modifiables: string[] }>('/api/admin/config');
+export const adminPatchConfig = (values: Record<string, unknown>) =>
+  adminSendJson<{ applied: Record<string, unknown> }>('/api/admin/config', 'PATCH', { values });
+
+export interface AuditEntry { id: number; ts: string; user_id: number | null; email: string | null; action: string; detail: string | null; ip: string | null; }
+export const adminAudit = (limit = 200, action = '') =>
+  adminGet<{ items: AuditEntry[] }>(`/api/admin/audit?limit=${limit}${action ? `&action=${encodeURIComponent(action)}` : ''}`).then((d) => d.items);
+export const adminPurge = (days: number) =>
+  adminSendJson<{ before: string; deleted: Record<string, number> }>('/api/admin/purge', 'POST', { days });

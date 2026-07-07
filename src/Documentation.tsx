@@ -3,13 +3,9 @@
 import { useState } from 'react';
 
 // ---------- petits blocs réutilisables ----------
-function Callout({ n }: { n: number }) {
-  return <span className="doc-callout">{n}</span>;
-}
-
-// Cadre « fenêtre » qui donne l'aspect d'une capture d'écran annotée.
-function Shot({ title, children, legend }: {
-  title: string; children: React.ReactNode; legend?: { n: number; t: string }[];
+// Cadre « fenêtre » qui présente une capture d'écran RÉELLE (src) ou, à défaut, une maquette.
+function Shot({ title, src, children, legend }: {
+  title: string; src?: string; children?: React.ReactNode; legend?: { n: number; t: string }[];
 }) {
   return (
     <figure className="doc-shot">
@@ -17,7 +13,9 @@ function Shot({ title, children, legend }: {
         <span className="doc-dot" /><span className="doc-dot" /><span className="doc-dot" />
         <span className="doc-shot-title">{title}</span>
       </div>
-      <div className="doc-shot-body">{children}</div>
+      <div className="doc-shot-body">
+        {src ? <img className="doc-shot-img" src={src} alt={title} loading="lazy" /> : children}
+      </div>
       {legend && (
         <figcaption className="doc-legend">
           {legend.map((l) => (
@@ -167,20 +165,10 @@ export default function Documentation() {
           <Step n={4}>Suivez le <strong>parcours guidé</strong> (questions de suivi) ou testez un <strong>autre angle</strong>.</Step>
           <Step n={5}>Partagez (permalien) ou <strong>rangez</strong> la réponse dans un dossier du cabinet.</Step>
         </ol>
-        <Shot title="jurilux.lu — Recherche"
-          legend={[{ n: 1, t: 'Question en langage naturel' }, { n: 2, t: 'Réponse + citations cliquables (→ PDF)' },
-                   { n: 3, t: 'Parcours guidé : questions de suivi' }, { n: 4, t: 'Filtres année / juridiction / source' }]}>
-          <div className="mk-search">
-            <div className="mk-row"><input className="mk-input" readOnly value="Quel préavis pour un licenciement au Luxembourg ?" /><Callout n={1} /><button className="mk-send">Rechercher</button></div>
-            <div className="mk-answer">
-              <p>Le préavis dépend de l'ancienneté du salarié : 2 mois (&lt; 5 ans), 4 mois (5–10 ans), 6 mois (&gt; 10 ans). <span className="mk-cite">[Code du travail L.124-3]</span> <Callout n={2} /></p>
-              <div className="mk-src"><span className="mk-badge law">law</span> Code du travail — art. L.124-3 · <span className="mk-link">PDF</span></div>
-            </div>
-            <div className="mk-followups"><span className="mk-fu-lead">Pour aller plus loin :</span><Callout n={3} />
-              <ol><li>Quelles indemnités en cas de non-respect du préavis ?</li><li>Le préavis court-il pendant l'essai ?</li></ol></div>
-            <div className="mk-filters"><span className="mk-chip">Année ≥ 2015</span><span className="mk-chip">CSJ</span><span className="mk-chip">Loi</span><Callout n={4} /></div>
-          </div>
-        </Shot>
+        <Shot title="jurilux.lu — Recherche" src="/guide/recherche.png"
+          legend={[{ n: 1, t: 'Réponse sourcée + citations cliquables (→ PDF)' },
+                   { n: 2, t: 'Parcours guidé : questions de suivi' },
+                   { n: 3, t: 'Autre angle + retour d\'avis (👍/👎)' }]} />
       </Section>
 
       <Section id="vault" title="2 · Vault — documents privés du cabinet">
@@ -195,42 +183,17 @@ export default function Documentation() {
           <Step n={4}><strong>Revue tabulaire</strong> : comparez plusieurs documents (1 doc = 1 ligne).</Step>
           <Step n={5}><strong>Revue de contrat</strong> : appliquez un <em>playbook</em> de règles → verdict par règle.</Step>
         </ol>
-        <div className="doc-two">
-          <Shot title="/vault — Analyses"
-            legend={[{ n: 1, t: 'Vérificateur de citations (✓ / ✗ vs corpus)' }, { n: 2, t: 'Extraction : matière, montants, avocats' }]}>
-            <div className="mk-vault">
-              <div className="mk-doc">📄 conclusions_adverses.pdf <span className="mk-badge ok">ready</span></div>
-              <div className="mk-tabs"><span className="mk-tab active">Citations</span><span className="mk-tab">Extraire</span><span className="mk-tab">Résumé</span><span className="mk-tab">Contre-arg.</span><span className="mk-tab">Chronologie</span></div>
-              <table className="mk-table"><thead><tr><th>Référence</th><th>Vérifié</th></tr></thead>
-                <tbody><tr><td>article L.124-10</td><td className="ok">✓</td></tr><tr><td>article 9999</td><td className="ko">✗</td></tr></tbody></table>
-              <Callout n={1} />
-            </div>
-          </Shot>
-          <Shot title="/vault — Revue de contrat"
-            legend={[{ n: 1, t: 'Verdict par règle : conforme / à revoir / absent' }]}>
-            <div className="mk-vault">
-              <div className="mk-doc">📄 bail_commercial.pdf · playbook « Bail LU »</div>
-              <table className="mk-table"><thead><tr><th>Règle</th><th>Verdict</th></tr></thead><tbody>
-                <tr><td>Durée &amp; renouvellement</td><td><span className="mk-badge ok">ok</span></td></tr>
-                <tr><td>Loi applicable (LU)</td><td><span className="mk-badge warn">issue</span></td></tr>
-                <tr><td>Indexation du loyer</td><td><span className="mk-badge ko">missing</span></td></tr>
-              </tbody></table><Callout n={1} />
-            </div>
-          </Shot>
-        </div>
+        <Shot title="/vault — Documents privés & analyses" src="/guide/vault.png"
+          legend={[{ n: 1, t: 'Dépôt + liste des documents (isolés par compte)' },
+                   { n: 2, t: 'Analyses : citations, extraction, résumé, contre-argumentaire, chronologie' },
+                   { n: 3, t: 'Interrogation isolée ou hybride ; revue de contrat par playbook' }]} />
       </Section>
 
       <Section id="redaction" title="3 · Rédaction assistée">
         <p>Menu → <strong>✍️ Rédiger</strong>. Décrivez le document voulu ; Jurilux produit un
           brouillon <strong>fondé sur le corpus officiel</strong>, avec citations.</p>
-        <Shot title="Rédiger — brouillon sourcé"
-          legend={[{ n: 1, t: 'Instruction' }, { n: 2, t: 'Brouillon + fondements (→ PDF)' }]}>
-          <div className="mk-search">
-            <div className="mk-row"><input className="mk-input" readOnly value="Rédige une mise en demeure pour loyers impayés (droit LU)" /><Callout n={1} /></div>
-            <div className="mk-answer"><p>Madame, Monsieur, En votre qualité de preneur… vous restez devoir la somme de… <span className="mk-cite">[bail — art. 1728 C. civ.]</span></p><Callout n={2} /></div>
-            <p className="mk-warn">Brouillon assisté — à relire par un avocat.</p>
-          </div>
-        </Shot>
+        <Shot title="Rédiger — brouillon sourcé" src="/guide/rediger.png"
+          legend={[{ n: 1, t: 'Instruction en langage naturel' }, { n: 2, t: 'Brouillon fondé sur le corpus (à relire par un avocat)' }]} />
       </Section>
 
       <Section id="cabinet" title="4 · Cabinet & cloisons déontologiques">
@@ -241,32 +204,25 @@ export default function Documentation() {
           <Step n={2}>Un dossier sensible peut être <strong>restreint 🔒</strong> (cloison déontologique) :
             invisible sauf pour les administrateurs de l'espace et les membres <em>explicitement autorisés</em>.</Step>
         </ol>
-        <Shot title="Mon cabinet — dossiers"
-          legend={[{ n: 1, t: 'Dossier restreint (conflits d\'intérêts)' }, { n: 2, t: 'Autoriser / révoquer un membre nommément' }]}>
-          <div className="mk-vault">
-            <div className="mk-doc">🔒 Affaire Dupont c. Martin <span className="mk-badge warn">restreint</span> <Callout n={1} /></div>
-            <div className="mk-access"><input className="mk-input sm" readOnly value="collègue@cabinet.lu" /><button className="mk-send sm">Autoriser</button><Callout n={2} /></div>
-          </div>
-        </Shot>
+        <Shot title="Mon cabinet — membres & dossiers" src="/guide/cabinet.png"
+          legend={[{ n: 1, t: 'Membres du cabinet et leurs rôles' },
+                   { n: 2, t: 'Dossiers partagés ; un dossier restreint reste invisible aux non-autorisés' }]} />
       </Section>
 
       <Section id="veille" title="5 · Veille — alertes">
         <p>Menu → <strong>🔔 Mes alertes</strong>. Enregistrez un sujet ; Jurilux remonte les
           nouvelles décisions correspondantes (badge non-lus). Le contrôle tourne aussi au cron d'ingestion.</p>
+        <Shot title="Mes alertes" src="/guide/alertes.png"
+          legend={[{ n: 1, t: 'Sujets suivis' }, { n: 2, t: '« Vérifier » relance et remonte les nouveautés' }]} />
       </Section>
 
       <Section id="insight" title="6 · Insight & analytics contentieux">
         <p>Onglet public <strong>Insight</strong> : profils d'<strong>avocats</strong> (jamais de magistrats)
           issus de la jurisprudence publique, et <strong>analytics</strong> (volumes + taux de succès estimé
           par matière / juridiction / année).</p>
-        <Shot title="/insight — Analytics"
-          legend={[{ n: 1, t: 'Taux de succès estimé (indicatif)' }]}>
-          <div className="mk-vault">
-            <div className="mk-stats"><span className="mk-stat"><b>1 240</b>affaires</span><span className="mk-stat"><b>62 %</b>taux estimé<Callout n={1} /></span><span className="mk-stat"><b>318</b>avocats</span></div>
-            <table className="mk-table"><thead><tr><th>Matière</th><th>Affaires</th><th>Taux</th></tr></thead><tbody>
-              <tr><td>Droit du travail</td><td>512</td><td>58 %</td></tr><tr><td>Bail / logement</td><td>287</td><td>64 %</td></tr></tbody></table>
-          </div>
-        </Shot>
+        <Shot title="/insight — Fiche avocat" src="/guide/insight.png"
+          legend={[{ n: 1, t: 'Profil d\'un avocat (jamais de magistrat) — décisions publiques' },
+                   { n: 2, t: 'Issue estimée, confrères, activité par année/juridiction' }]} />
       </Section>
 
       <Section id="compte" title="7 · Mon compte">
@@ -274,6 +230,8 @@ export default function Documentation() {
           <code>X-API-Key</code>), <strong>bibliothèque de prompts</strong> (perso/cabinet),
           <strong>export RGPD</strong> (téléchargement de toutes vos données), mot de passe.
           Le <strong>SSO du cabinet</strong> (OIDC) s'affiche à la connexion s'il est configuré.</p>
+        <Shot title="Mon compte" src="/guide/compte.png"
+          legend={[{ n: 1, t: 'Clés d\'API de service' }, { n: 2, t: 'Prompts, export RGPD, mot de passe' }]} />
       </Section>
 
       {/* ============ DOCUMENTATION TECHNIQUE ============ */}

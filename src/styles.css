@@ -795,6 +795,9 @@ a.nav-item { display: block; text-decoration: none; }
 .doc-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border-2); }
 .doc-shot-title { margin-left: 8px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
 .doc-shot-body { padding: 16px; position: relative; }
+/* Capture d'écran réelle (générée par le harnais E2E) affichée dans le cadre « fenêtre ». */
+.doc-shot-body:has(.doc-shot-img) { padding: 0; }
+.doc-shot-img { display: block; width: 100%; height: auto; }
 .doc-legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 14px; border-top: 1px dashed var(--border);
   background: var(--card-2); font-size: 12.5px; color: var(--muted); }
 .doc-callout { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;

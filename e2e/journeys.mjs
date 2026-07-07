@@ -944,6 +944,108 @@ await journey(browser, 'W9-06-changer-mdp-succes', async (page) => {
   await voir(page, 'Mot de passe modifié', { timeout: 8000 });   // confirmation du succès
 });
 
+// ═══════════════ VAGUE 10 — BRANCHES D'ERREUR ATTEIGNABLES + VARIANTES ═══════════════
+await journey(browser, 'W10-01-inscription-email-existant', async (page) => {
+  await accueil(page);
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill('pro@demo.lu');   // déjà pris
+  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(700);
+  await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });   // refus → reste sur le formulaire
+  await absent(page, 'Plan pro');
+});
+await journey(browser, 'W10-02-connexion-email-inconnu', async (page) => {
+  await accueil(page);
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(`inconnu_${Date.now()}@nowhere.lu`);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(700);
+  await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });
+});
+await journey(browser, 'W10-03-inviter-non-inscrit', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  const nom = `CabInvErr ${Date.now()}`;
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.getByPlaceholder("email d'un membre inscrit").fill('pasla@nowhere.lu');   // non inscrit
+  await page.getByRole('button', { name: 'Inviter' }).first().click();
+  await page.waitForTimeout(700);
+  await absent(page, 'pasla@nowhere.lu');   // invitation rejetée → pas ajouté
+});
+await journey(browser, 'W10-04-autoriser-non-membre', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  const nom = `CabAccErr ${Date.now()}`, doss = `PièceX ${Date.now()}`;
+  await page.getByPlaceholder('Nom du cabinet').fill(nom);
+  await page.locator('.drawer').getByRole('button', { name: 'Créer', exact: true }).first().click();
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.getByPlaceholder(/Nouveau dossier/).fill(doss);
+  await page.getByRole('button', { name: 'Créer', exact: true }).last().click();
+  await voir(page, doss, { timeout: 8000 });
+  await page.getByRole('button', { name: 'Restreindre' }).first().click();
+  await page.getByPlaceholder('Autoriser un membre (email)').fill('etudiant@demo.lu');   // pas membre de CE cabinet
+  await page.getByRole('button', { name: 'Autoriser' }).first().click();
+  await page.waitForTimeout(700);
+  await absent(page, 'etudiant@demo.lu');   // refus → non autorisé
+});
+await journey(browser, 'W10-05-vault-vide', async (page) => {
+  await accueil(page);
+  // nouveau compte → Vault vide
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(`vide_${Date.now()}@demo.lu`);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
+  await form.locator('button[type=submit]').click();
+  await voir(page, 'Plan étudiant', { timeout: 8000 });
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'Aucun document déposé', { timeout: 8000 });
+});
+await journey(browser, 'W10-06-insight-sans-resultat', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Zzzxxqqnobody');
+  await page.waitForTimeout(900);
+  await voir(page, '0 résultat', { timeout: 8000 });
+});
+await journey(browser, 'W10-07-insight-tri-recent', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByTitle('Trier').selectOption('recent');
+  await voir(page, 'triés par activité récente', { timeout: 8000 });   // ligne de résultats (pas l'option)
+});
+await journey(browser, 'W10-08-insight-tri-taux', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByTitle('Trier').selectOption('winrate');
+  await voir(page, 'triés par taux estimé favorable', { timeout: 8000 });
+});
+await journey(browser, 'W10-09-filtre-source-loi', async (page) => {
+  await accueil(page);
+  await page.locator('.filter-toggle').first().click().catch(() => {});
+  await page.waitForTimeout(300);
+  await page.getByLabel('Type').selectOption('law');
+  await ask(page, 'Que dit le Code du travail sur le préavis ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'W10-10-filtres-combines', async (page) => {
+  await accueil(page);
+  await page.locator('.filter-toggle').first().click().catch(() => {});
+  await page.waitForTimeout(300);
+  await page.getByLabel('Type').selectOption('jurisprudence');
+  await page.getByLabel('Année min').fill('2018');
+  await page.getByLabel('Année max').fill('2024');
+  await page.getByLabel('Juridiction').fill('csj_ch08');
+  await ask(page, 'Licenciement pour faute grave ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

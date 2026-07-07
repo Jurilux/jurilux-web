@@ -39,7 +39,7 @@ Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 - `e2e/artifacts/rapport.json` — agrégat : succès/échec, perf, erreurs, réseau, ressources
   cassées. Exploitable pour un tableau de bord ou une passerelle CI.
 
-## Parcours couverts (96, avec assertions)
+## Parcours couverts (106, avec assertions)
 
 Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-navigateur » :
 - **Vague 2 — permissions & CRUD** : refus admin (non-admin/anonyme), Vault anonyme, contrôles
@@ -58,6 +58,9 @@ Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-
   Questions/Retours/Corpus/Activité/Routage LLM, volumétrie corpus.
 - **Vague 9 — variantes & compléments** : nav anonyme restreinte, suppression de doc Vault,
   vérification d'alertes, contenu de permalien, changement de mot de passe réussi.
+- **Vague 10 — erreurs atteignables & variantes** : inscription/connexion rejetées, invitation
+  d'un non-inscrit, autorisation d'un non-membre, Vault vide, recherche avocat sans résultat,
+  tris Insight, filtre source « loi », filtres combinés.
 
 ### Socle A–H
 

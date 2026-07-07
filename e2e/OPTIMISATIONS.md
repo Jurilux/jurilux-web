@@ -1,5 +1,25 @@
 # Optimisations relevées par le harnais E2E
 
+## 🔒 P0 — Fuite de cloison déontologique : intitulé d'un dossier restreint visible · ✅ CORRIGÉ
+
+**Constat (trouvé par la suite étendue, parcours `D04`).** Un membre d'un cabinet NON autorisé
+sur un dossier restreint recevait quand même son **intitulé** via `GET /api/workspaces/{wid}/dossiers` :
+`list_dossiers` renvoyait tous les dossiers sans filtrer les restreints. La cloison (404) n'était
+appliquée qu'à l'**ouverture** du dossier (`/api/dossiers/{did}/items`), pas au **listing**.
+
+**Impact.** L'existence et le nom d'un dossier confidentiel (ex. conflit d'intérêts —
+« Affaire Étoile (confidentiel) ») fuitaient au reste du cabinet, alors que la règle produit
+est « dossier restreint = **invisible** ».
+
+**Correctif appliqué (backend).** `ws.list_dossiers(wid, user_id, role)` exclut désormais les
+dossiers restreints que le membre n'a pas le droit de voir (owner/admin ou autorisé nommément).
+Test de non-régression ajouté (`tests/test_socle.py::test_ethical_walls` couvre maintenant la
+LISTE, pas seulement les items). Parcours `D04` verrouille le comportement côté UI.
+
+---
+
+# Optimisations UX relevées par le harnais E2E
+
 Constats issus du parcours automatisé des 14 parcours utilisateurs (Chromium) + inspection
 ciblée du code. Chaque point donne le **constat**, la **preuve**, le **correctif** et son
 **statut**.

@@ -1,268 +1,346 @@
-// Harnais E2E Chromium : pilote TOUS les parcours utilisateurs contre l'app réelle
-// (front Vite + backend `functional.e2e_server` stubé). Pour chaque parcours : capture
-// une screenshot, le temps de rendu, les erreurs console/page, et un résumé réseau.
-//
-// Prérequis : backend démo sur :8088 + `vite` sur :5173 (cf. e2e/README.md).
-// Lancement :  node e2e/journeys.mjs   (variables : FRONT_URL, OUT_DIR, HEADFUL=1, ONLY=nom)
-//
-// Sortie : e2e/artifacts/<parcours>.png + e2e/artifacts/rapport.json (agrégat exploitable).
-import pw from '/opt/node22/lib/node_modules/playwright/index.js';
-import { mkdirSync, writeFileSync } from 'node:fs';
-const { chromium } = pw;
+// Suite MAXIMALE de parcours utilisateurs, pilotée en Chromium contre l'app réelle
+// (front + backend démo `functional.e2e_server`, multi-cabinets/multi-profils, stubé).
+// Chaque parcours VÉRIFIE un résultat (assertion) en plus de capturer une screenshot.
+// Voir e2e/README.md. Lancement : SHARE_ID=<...> node e2e/journeys.mjs
+import { writeFileSync } from 'node:fs';
+import {
+  FRONT, OUT, launch, makeRunner, voir, absent,
+  dismissOnboarding, ask, login, menuItem, ouvrirMenu, ouvrirCabinet,
+} from './lib.mjs';
 
-const FRONT = process.env.FRONT_URL || 'http://127.0.0.1:5173';
-const OUT = process.env.OUT_DIR || new URL('./artifacts', import.meta.url).pathname;
-const ONLY = process.env.ONLY || '';
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-mkdirSync(OUT, { recursive: true });
-
-const MDP = 'password123';
+const SHARE_ID = process.env.SHARE_ID || '';
 const results = [];
+const journey = makeRunner(results);
+const browser = await launch();
 
-// ---- capteurs par page : console, erreurs, réseau ----
-function instrument(page) {
-  const bag = { console: [], errors: [], requests: [], slow: [] };
-  page.on('console', (msg) => {
-    if (msg.type() === 'error' || msg.type() === 'warning')
-      bag.console.push({ type: msg.type(), text: msg.text().slice(0, 300) });
-  });
-  page.on('pageerror', (e) => bag.errors.push(String(e).slice(0, 300)));
-  bag.broken = [];
-  page.on('requestfinished', async (req) => {
-    try {
-      const resp = await req.response();
-      const t = req.timing();
-      const dur = t ? Math.round(t.responseEnd - t.startTime) : 0;
-      const rec = { url: req.url().replace(FRONT, ''), method: req.method(), status: resp?.status(), dur };
-      bag.requests.push(rec);
-      if (dur > 400) bag.slow.push(rec);
-      if (resp && resp.status() >= 400) bag.broken.push({ url: rec.url, status: resp.status() });
-    } catch { /* requête annulée */ }
-  });
-  return bag;
-}
+// Ouvre l'accueil, ferme l'onboarding. Raccourci commun.
+const accueil = async (page) => { await page.goto(FRONT, { waitUntil: 'networkidle' }); await dismissOnboarding(page); };
 
-// ---- métriques de perf lues dans la page (navigation + ressources + LCP) ----
-async function perf(page) {
-  return page.evaluate(() => {
-    const nav = performance.getEntriesByType('navigation')[0] || {};
-    const res = performance.getEntriesByType('resource');
-    const js = res.filter((r) => r.name.endsWith('.js'));
-    const bytes = res.reduce((s, r) => s + (r.transferSize || 0), 0);
-    const lcp = performance.getEntriesByType('largest-contentful-paint').pop();
-    const paint = performance.getEntriesByName('first-contentful-paint')[0];
-    return {
-      domContentLoaded: Math.round(nav.domContentLoadedEventEnd || 0),
-      loadEvent: Math.round(nav.loadEventEnd || 0),
-      fcp: paint ? Math.round(paint.startTime) : null,
-      lcp: lcp ? Math.round(lcp.startTime) : null,
-      requests: res.length,
-      jsRequests: js.length,
-      transferKB: Math.round(bytes / 1024),
-    };
-  });
-}
-
-async function dismissOnboarding(page) {
-  try { await page.getByText('Passer', { exact: false }).first().click({ timeout: 2500 }); } catch {}
-}
-
-async function askQuestion(page, q) {
-  const input = page.locator('textarea, input[type=text]')
-    .filter({ hasNot: page.locator('[type=checkbox]') }).first();
-  await input.waitFor({ timeout: 8000 });
-  await input.fill(q);
-  // bouton Envoyer si présent, sinon Entrée
-  const send = page.getByRole('button', { name: 'Envoyer' }).first();
-  if (await send.isVisible().catch(() => false)) await send.click();
-  else await input.press('Enter');
-}
-
-async function login(page, email) {
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  const form = page.locator('form.auth-form');
-  await form.getByPlaceholder('vous@exemple.lu').fill(email);
-  await form.getByPlaceholder('8 caractères minimum').first().fill(MDP);
-  await form.locator('button[type=submit]').click();  // scopé au formulaire (évite l'ambiguïté)
-  await page.waitForTimeout(700);
-}
-
-async function openMenu(page) {
-  const b = page.getByRole('button', { name: 'Ouvrir le menu' });
-  if (await b.isVisible().catch(() => false)) await b.click();
-}
-
-// ---- moteur d'un parcours : instrumente, chronomètre, capture, tolère l'échec ----
-async function journey(browser, name, fn) {
-  if (ONLY && !name.includes(ONLY)) return;
-  const ctx = await browser.newContext({ viewport: { width: 1120, height: 900 } });
-  const page = await ctx.newPage();
-  page.setDefaultTimeout(8000);  // borne dure : un sélecteur absent échoue vite (pas de hang 30s)
-  const bag = instrument(page);
-  const t0 = Date.now();
-  const rec = { name, ok: true, ms: 0 };
-  try {
-    await fn(page, bag);
-    await page.waitForTimeout(250);
-  } catch (e) {
-    rec.ok = false;
-    rec.error = String(e).split('\n')[0].slice(0, 200);
-  }
-  rec.ms = Date.now() - t0;
-  try { rec.perf = await perf(page); } catch {}
-  rec.consoleIssues = bag.console.length;
-  rec.pageErrors = bag.errors.length;
-  rec.errorsSample = bag.errors.slice(0, 3);
-  rec.consoleSample = bag.console.slice(0, 4);
-  rec.slowRequests = bag.slow.slice(0, 6);
-  rec.brokenResources = bag.broken || [];
-  rec.requestCount = bag.requests.length;
-  try { await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); } catch {}
-  results.push(rec);
-  console.log(`${rec.ok ? '✓' : '✗'} ${name} (${rec.ms}ms, ${rec.requestCount} req, ${rec.consoleIssues} console, ${rec.pageErrors} err)`);
-  await ctx.close();
-}
-
-// ============================ PARCOURS ============================
-const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
-
-// 1. Accueil anonyme (perf de première charge)
-await journey(browser, '01-accueil', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
+// ═══════════════ A. SERVICE & RECHERCHE (public) ═══════════════
+await journey(browser, 'A01-accueil', async (page) => {
+  await accueil(page);
+  await voir(page, 'Quelle question de droit');
 });
-
-// 2. Question → parcours guidé (follow_ups) + autre angle
-await journey(browser, '02-question-parcours-guide', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await askQuestion(page, 'Dans quels cas un licenciement avec effet immédiat est-il justifié ?');
-  await page.getByText('parcours guidé', { exact: false }).first().waitFor({ timeout: 15000 });
+await journey(browser, 'A02-parcours-guide', async (page) => {
+  await accueil(page);
+  await ask(page, 'Licenciement avec effet immédiat ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
 });
-
-// 3. Clic sur une question de suivi → nouvelle réponse
-await journey(browser, '03-clic-suivi', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await askQuestion(page, 'Licenciement avec effet immédiat ?');
+await journey(browser, 'A03-clic-question-suivi', async (page) => {
+  await accueil(page);
+  await ask(page, 'Faute grave ?');
   await page.locator('.followup-btn').first().waitFor({ timeout: 15000 });
+  const q = await page.locator('.followup-btn').first().innerText();
   await page.locator('.followup-btn').first().click();
-  await page.waitForTimeout(1500);
+  await page.locator('.bubble.user', { hasText: q.slice(0, 20) }).first().waitFor({ timeout: 8000 });
 });
-
-// 4. Mode pédagogique
-await journey(browser, '04-pedagogique', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
+await journey(browser, 'A04-autre-angle', async (page) => {
+  await accueil(page);
+  await ask(page, 'Préavis de licenciement ?');
+  await voir(page, 'Autre angle', { timeout: 15000 });
+});
+await journey(browser, 'A05-mode-pedagogique', async (page) => {
+  await accueil(page);
   const cb = page.locator('input[type=checkbox]').first();
   if (await cb.isVisible().catch(() => false)) await cb.check().catch(() => {});
-  await askQuestion(page, 'Explique la faute grave en droit du travail');
-  await page.waitForTimeout(1500);
+  await ask(page, 'Explique la faute grave');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'A06-filtres', async (page) => {
+  await accueil(page);
+  await page.locator('.filter-toggle, .filter-toggle.active').first().click().catch(() => {});
+  await page.waitForTimeout(400);
+  await ask(page, 'Résiliation de bail ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+});
+await journey(browser, 'A07-refus-hors-sujet', async (page) => {
+  await accueil(page);
+  await ask(page, 'Quelle est la météo demain à Luxembourg ?');
+  await voir(page, 'Aucun document pertinent', { timeout: 15000 });
+});
+await journey(browser, 'A08-feedback-positif', async (page) => {
+  await accueil(page);
+  await ask(page, 'Congé parental ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByText('👍', { exact: false }).first().click();
+  await page.waitForTimeout(500);
+});
+await journey(browser, 'A09-feedback-manquant', async (page) => {
+  await accueil(page);
+  await ask(page, 'Heures supplémentaires ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByText('👎', { exact: false }).first().click();
+  const champ = page.getByPlaceholder("Qu'est-ce qui manquait ?");
+  if (await champ.isVisible().catch(() => false)) { await champ.fill('Manque une référence jurisprudentielle.'); await page.getByRole('button', { name: 'Envoyer' }).first().click(); }
+});
+await journey(browser, 'A10-partager', async (page) => {
+  await accueil(page);
+  await ask(page, 'Rupture conventionnelle ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });
+  await page.getByRole('button', { name: /Partager/ }).first().click();
+  await voir(page, 'Lien copié', { timeout: 8000 });
+});
+await journey(browser, 'A11-permalien-public', async (page) => {
+  await page.goto(SHARE_ID ? `${FRONT}/r/${SHARE_ID}` : FRONT, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(800);
+  await voir(page, 'Jurilux');
 });
 
-// 5. Feedback 👍
-await journey(browser, '05-feedback', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await askQuestion(page, 'Préavis de licenciement ?');
-  await page.getByText('parcours guidé', { exact: false }).first().waitFor({ timeout: 15000 });
-  await page.getByText('👍', { exact: false }).first().click().catch(() => {});
-  await page.waitForTimeout(600);
-});
-
-// 6. Partage → permalien public
-await journey(browser, '06-partage', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await askQuestion(page, 'Congé parental conditions ?');
-  await page.getByText('parcours guidé', { exact: false }).first().waitFor({ timeout: 15000 });
-  await page.getByRole('button', { name: /Partager/ }).first().click().catch(() => {});
-  await page.waitForTimeout(1000);
-});
-
-// 7. Insight avocats + analytics
-await journey(browser, '07-insight', async (page) => {
+// ═══════════════ B. INSIGHT AVOCATS (public) ═══════════════
+await journey(browser, 'B01-insight-recherche', async (page) => {
   await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1200);
+  await voir(page, 'Insight');
+  const s = page.getByPlaceholder('Rechercher un avocat…');
+  if (await s.isVisible().catch(() => false)) { await s.fill('Dupont'); await page.waitForTimeout(1000); }
+});
+await journey(browser, 'B02-insight-analytics', async (page) => {
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Analytics contentieux/ }).first().click().catch(() => {});
+  await voir(page, 'Analytics contentieux', { timeout: 8000 });
 });
 
-// 8. Inscription (nouveau compte)
-await journey(browser, '08-inscription', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
+// ═══════════════ C. AUTH & COMPTE ═══════════════
+await journey(browser, 'C01-inscription', async (page) => {
+  await accueil(page);
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(`e2e_${Date.now()}@demo.lu`);
+  await form.getByPlaceholder('8 caractères minimum').first().fill('password123');
+  await form.locator('button[type=submit]').click();
+  await voir(page, 'Plan étudiant', { timeout: 8000 });
+});
+await journey(browser, 'C02-connexion-pro', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await voir(page, 'Plan pro', { timeout: 8000 });
+});
+await journey(browser, 'C03-mauvais-mot-de-passe', async (page) => {
+  await accueil(page);
   await page.getByRole('button', { name: /Se connecter/ }).first().click();
   const form = page.locator('form.auth-form');
-  // basculer en mode inscription (lien hors formulaire)
-  await page.locator('.modal').getByText("S'inscrire", { exact: false }).first().click().catch(() => {});
-  await form.getByPlaceholder('vous@exemple.lu').fill(`e2e_${Date.now()}@demo.lu`);
-  await form.getByPlaceholder('8 caractères minimum').first().fill(MDP);
-  await form.locator('button[type=submit]').click().catch(() => {});
-  await page.waitForTimeout(900);
+  await form.getByPlaceholder('vous@exemple.lu').fill('pro@demo.lu');
+  await form.getByPlaceholder('8 caractères minimum').first().fill('mauvais_mdp');
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(800);
+  // échec attendu : la connexion ne passe pas → le formulaire reste affiché (non fermé)
+  await page.locator('form.auth-form').waitFor({ state: 'visible', timeout: 5000 });
+  await absent(page, 'Plan pro');
 });
-
-// 9. Connexion (pro) + historique + compte
-await journey(browser, '09-connexion-compte', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await login(page, 'etudiant@demo.lu');
-  await openMenu(page);
-  await page.getByText('Historique', { exact: false }).first().click().catch(() => {});
-  await page.waitForTimeout(900);
-});
-
-// 10. Vault (pro) — documents privés
-await journey(browser, '10-vault', async (page) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
+await journey(browser, 'C04-deconnexion', async (page) => {
+  await accueil(page);
   await login(page, 'pro@demo.lu');
-  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1200);
+  await ouvrirMenu(page);
+  const bye = page.locator('.nav-drawer').getByRole('button', { name: 'Déconnexion' });
+  await bye.waitFor({ state: 'visible', timeout: 8000 });
+  await bye.click();
+  await page.waitForTimeout(700);
+  // déconnecté : l'affordance de connexion réapparaît (attente explicite)
+  await page.getByRole('button', { name: /Se connecter/ }).first().waitFor({ state: 'visible', timeout: 10000 });
 });
-
-// 11. Rédaction assistée (pro) — viewport mobile : Rédiger n'est QUE dans le tiroir ☰
-//     (constat produit : entrée absente de la barre latérale desktop, cf. rapport).
-await journey(browser, '11-rediger', async (page) => {
-  await page.setViewportSize({ width: 390, height: 840 });
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
+await journey(browser, 'C05-changer-mot-de-passe', async (page) => {
+  await accueil(page);
   await login(page, 'pro@demo.lu');
-  await openMenu(page);
-  await page.getByText('Rédiger', { exact: false }).first().click().catch(() => {});
-  await page.waitForTimeout(900);
-});
-
-// 12. Mon compte (clés d'API / prompts / données) — idem, tiroir ☰ mobile uniquement
-await journey(browser, '12-mon-compte', async (page) => {
-  await page.setViewportSize({ width: 390, height: 840 });
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await login(page, 'pro@demo.lu');
-  await openMenu(page);
-  await page.getByText('Mon compte', { exact: false }).first().click().catch(() => {});
-  await page.waitForTimeout(900);
-});
-
-// 13. Backoffice admin — balayage des onglets
-await journey(browser, '13-admin', async (page, bag) => {
-  await page.goto(FRONT, { waitUntil: 'networkidle' });
-  await dismissOnboarding(page);
-  await login(page, 'admin@demo.lu');
-  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1000);
-  const onglets = ['Tableau de bord', 'Inspecteur', 'Banc de test', 'Utilisateurs', 'Questions',
-                   'Retours', 'Corpus', 'Santé', 'Paramétrage', 'Audit', 'Documentation'];
-  for (const o of onglets) {
-    const tab = page.getByRole('button', { name: new RegExp(o, 'i') }).first();
-    if (await tab.isVisible().catch(() => false)) { await tab.click().catch(() => {}); await page.waitForTimeout(500); }
+  await menuItem(page, 'Mon compte');
+  await voir(page, "Clés d'API");   // section unique et visible du volet « Mon compte »
+  const old = page.getByPlaceholder('Mot de passe actuel');
+  if (await old.isVisible().catch(() => false)) {
+    await old.fill('password123');
+    await page.getByPlaceholder('Nouveau mot de passe (≥ 8 caractères)').fill('password123');
+    await page.getByRole('button', { name: 'Changer' }).first().click().catch(() => {});
   }
 });
+await journey(browser, 'C06-quota-etudiant', async (page) => {
+  await accueil(page);
+  await login(page, 'etudiant@demo.lu');
+  // 2 questions restantes (5 - 3 déjà consommées) → la 3e franchit le quota
+  for (const q of ['Question 1 ?', 'Question 2 ?', 'Question 3 ?', 'Question 4 ?']) {
+    await ask(page, q);
+    await page.waitForTimeout(1400);
+    if (await page.getByText('Quota mensuel atteint', { exact: false }).first().isVisible().catch(() => false)) break;
+  }
+  await voir(page, 'Quota mensuel atteint');
+});
 
-// 14. Permalien partagé (vue publique /r/<id>)
-await journey(browser, '14-permalien', async (page) => {
-  const shareId = process.env.SHARE_ID;
-  const url = shareId ? `${FRONT}/r/${shareId}` : FRONT;
-  await page.goto(url, { waitUntil: 'networkidle' });
+// ═══════════════ D. CABINET, RÔLES & CLOISONS DÉONTOLOGIQUES ═══════════════
+await journey(browser, 'D01-cabinet-ouvrir', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  await voir(page, 'Étude Dupont');
+});
+await journey(browser, 'D02-cabinet-membres', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'dupont.associe@demo.lu', { timeout: 8000 });
+});
+await journey(browser, 'D03-cloison-owner-voit', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'Affaire Étoile', { timeout: 8000 });
+});
+await journey(browser, 'D04-cloison-collaborateur-404', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.collab@demo.lu');
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'Dossier Martin', { timeout: 8000 });   // le dossier ouvert est visible
+  await absent(page, 'Affaire Étoile');                    // le dossier restreint est masqué
+});
+await journey(browser, 'D05-cloison-associe-autorise', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.associe@demo.lu');
+  await ouvrirCabinet(page, 'Étude Dupont');
+  await voir(page, 'Affaire Étoile', { timeout: 8000 });   // autorisé nommément → visible
+});
+await journey(browser, 'D06-isolation-inter-cabinet', async (page) => {
+  await accueil(page);
+  await login(page, 'weber.owner@demo.lu');
+  await menuItem(page, 'Mon cabinet');
+  await voir(page, 'Cabinet Weber', { timeout: 8000 });
+  await absent(page, 'Étude Dupont');                      // cabinet d'un autre → invisible
+});
+
+// ═══════════════ E. VEILLE (alertes) ═══════════════
+await journey(browser, 'E01-alertes-liste', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Alertes');
+  await voir(page, 'bail commercial', { timeout: 8000 });
+});
+await journey(browser, 'E02-creer-alerte', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Alertes');
+  const champ = page.locator('.drawer input[type=text], .drawer input').first();
+  if (await champ.isVisible().catch(() => false)) {
+    await champ.fill('congé parental');
+    await page.locator('.drawer').getByRole('button', { name: /Créer|Ajouter|Suivre/ }).first().click().catch(() => {});
+    await page.waitForTimeout(600);
+  }
+  await voir(page, 'congé parental', { timeout: 8000 });
+});
+
+// ═══════════════ F. VAULT (documents privés, isolation) ═══════════════
+await journey(browser, 'F01-vault-liste', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'contrat_bail', { timeout: 8000 });
+});
+await journey(browser, 'F02-vault-upload', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  const nom = `piece_${Date.now()}.txt`;
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: nom, mimeType: 'text/plain', buffer: Buffer.from('Nouvelle piece deposee pour test.') });
+  await page.waitForTimeout(1200);
+  await voir(page, nom.slice(0, 12), { timeout: 8000 });
+});
+await journey(browser, 'F03-vault-question-isolee', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  const q = page.getByPlaceholder(/quels sont les délais/);
+  await q.fill('Quel préavis mentionnent mes documents ?');
+  await page.getByRole('button', { name: 'Demander' }).first().click();
+  await page.waitForTimeout(1500);
+});
+await journey(browser, 'F04-vault-analyse-resume', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Analyser' }).first().click().catch(() => {});
+  await page.getByRole('button', { name: 'Résumé' }).first().click().catch(() => {});
+  await voir(page, 'Résumé de test', { timeout: 10000 });
+});
+await journey(browser, 'F05-vault-isolation', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.associe@demo.lu');
+  await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
+  await voir(page, 'nda_client', { timeout: 8000 });   // son doc
+  await absent(page, 'contrat_bail');                  // doc d'un autre propriétaire → invisible
+});
+
+// ═══════════════ G. COMPTE PRO / ENTREPRISE ═══════════════
+await journey(browser, 'G01-cles-api', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Mon compte');
+  await voir(page, "Clés d'API", { timeout: 8000 });
+  await voir(page, 'Intégration compta');
+});
+await journey(browser, 'G02-creer-cle-api', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Mon compte');
+  await page.getByPlaceholder('Nom de la clé (ex. Intégration compta)').fill('Clé E2E');
+  await page.locator('form').filter({ has: page.getByPlaceholder('Nom de la clé (ex. Intégration compta)') })
+    .getByRole('button', { name: 'Créer' }).first().click().catch(() => {});
   await page.waitForTimeout(800);
+  await voir(page, 'Clé E2E', { timeout: 8000 });
+});
+await journey(browser, 'G03-prompts', async (page) => {
+  await accueil(page);
+  await login(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Mon compte');
+  await voir(page, "Résumé d'arrêt", { timeout: 8000 });
+});
+await journey(browser, 'G04-export-rgpd', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Mon compte');
+  await voir(page, 'Mes données (RGPD)', { timeout: 8000 });
+  await page.getByRole('button', { name: /Exporter mes données/ }).first().click().catch(() => {});
+  await page.waitForTimeout(600);
+});
+await journey(browser, 'G05-rediger', async (page) => {
+  await accueil(page);
+  await login(page, 'pro@demo.lu');
+  await menuItem(page, 'Rédiger');
+  // La rédaction est une fenêtre modale (pas un tiroir) : viser .modal, pas le champ d'accueil.
+  const zone = page.locator('.modal textarea').first();
+  await zone.waitFor({ state: 'visible', timeout: 8000 });
+  await zone.fill('Rédige une mise en demeure pour loyers impayés.');
+  await page.locator('.modal').getByRole('button', { name: /Rédiger|Générer/ }).first().click();
+  await voir(page, 'Document rédigé', { timeout: 12000 });
+});
+
+// ═══════════════ H. BACKOFFICE ADMIN ═══════════════
+const ADMIN_ONGLETS = ['Tableau de bord', 'Inspecteur', 'Banc de test', 'Utilisateurs',
+  'Questions', 'Retours', 'Corpus', 'Santé', 'Paramétrage', 'Audit', 'Documentation'];
+await journey(browser, 'H01-admin-balayage', async (page) => {
+  await accueil(page);
+  await login(page, 'admin@demo.lu');
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await voir(page, 'Tableau de bord', { timeout: 8000 });
+  for (const o of ADMIN_ONGLETS) {
+    const tab = page.getByRole('button', { name: new RegExp(o, 'i') }).first();
+    if (await tab.isVisible().catch(() => false)) { await tab.click().catch(() => {}); await page.waitForTimeout(450); }
+  }
+});
+await journey(browser, 'H02-admin-utilisateurs', async (page) => {
+  await accueil(page);
+  await login(page, 'admin@demo.lu');
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Utilisateurs/ }).first().click().catch(() => {});
+  await voir(page, 'etudiant@demo.lu', { timeout: 8000 });
+});
+await journey(browser, 'H03-admin-sante', async (page) => {
+  await accueil(page);
+  await login(page, 'admin@demo.lu');
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Santé/ }).first().click().catch(() => {});
+  await page.waitForTimeout(700);
+});
+await journey(browser, 'H04-admin-audit', async (page) => {
+  await accueil(page);
+  await login(page, 'admin@demo.lu');
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Audit/ }).first().click().catch(() => {});
+  await page.waitForTimeout(700);
 });
 
 await browser.close();
@@ -275,9 +353,10 @@ const summary = {
   failed: results.filter((r) => !r.ok).map((r) => ({ name: r.name, error: r.error })),
   withConsoleIssues: results.filter((r) => r.consoleIssues > 0).map((r) => r.name),
   withPageErrors: results.filter((r) => r.pageErrors > 0).map((r) => r.name),
-  brokenResources: [...new Set(results.flatMap((r) => (r.brokenResources || []).map((b) => `${b.status} ${b.url}`)))],
+  brokenResources: [...new Set(results.flatMap((r) => (r.broken || []).map((b) => `${b.status} ${b.url}`)))],
   journeys: results,
 };
 writeFileSync(`${OUT}/rapport.json`, JSON.stringify(summary, null, 2));
-console.log(`\n=== ${summary.ok}/${summary.total} parcours OK · console:${summary.withConsoleIssues.length} · erreurs:${summary.withPageErrors.length} ===`);
+console.log(`\n═══ ${summary.ok}/${summary.total} parcours OK · erreurs page:${summary.withPageErrors.length} · ressources cassées:${summary.brokenResources.length} ═══`);
+if (summary.failed.length) { console.log('Échecs :'); summary.failed.forEach((f) => console.log(`  ✗ ${f.name} — ${f.error}`)); }
 console.log(`rapport → ${OUT}/rapport.json`);

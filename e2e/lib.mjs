@@ -1,0 +1,135 @@
+// Bibliothèque du harnais E2E : lancement du navigateur, instrumentation (console/erreurs/
+// réseau), métriques de perf, assertions, et actions réutilisables (login, ask, navigation).
+// Les parcours (journeys.mjs) importent d'ici pour rester lisibles.
+import pw from '/opt/node22/lib/node_modules/playwright/index.js';
+import { mkdirSync } from 'node:fs';
+const { chromium } = pw;
+
+export const FRONT = process.env.FRONT_URL || 'http://127.0.0.1:5173';
+export const OUT = process.env.OUT_DIR || new URL('./artifacts', import.meta.url).pathname;
+export const MDP = 'password123';
+const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const ONLY = process.env.ONLY || '';
+mkdirSync(OUT, { recursive: true });
+
+export async function launch() {
+  return chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
+}
+
+// ---- instrumentation par page ----
+function instrument(page) {
+  const bag = { console: [], errors: [], requests: [], slow: [], broken: [] };
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning')
+      bag.console.push({ type: m.type(), text: m.text().slice(0, 300) });
+  });
+  page.on('pageerror', (e) => bag.errors.push(String(e).slice(0, 300)));
+  page.on('requestfinished', async (req) => {
+    try {
+      const resp = await req.response();
+      const t = req.timing();
+      const dur = t ? Math.round(t.responseEnd - t.startTime) : 0;
+      const rec = { url: req.url().replace(FRONT, ''), status: resp?.status(), dur };
+      bag.requests.push(rec);
+      if (dur > 500) bag.slow.push(rec);
+      if (resp && resp.status() >= 400 && !rec.url.includes('/favicon')) bag.broken.push({ url: rec.url, status: resp.status() });
+    } catch { /* annulée */ }
+  });
+  return bag;
+}
+
+async function perf(page) {
+  return page.evaluate(() => {
+    const nav = performance.getEntriesByType('navigation')[0] || {};
+    const paint = performance.getEntriesByName('first-contentful-paint')[0];
+    return { fcp: paint ? Math.round(paint.startTime) : null,
+             dcl: Math.round(nav.domContentLoadedEventEnd || 0) };
+  });
+}
+
+// ---- assertions : chaque parcours DOIT vérifier un résultat, pas juste screenshoter ----
+export class Attendu extends Error {}
+// Auto-attend l'apparition (waitFor), pas un isVisible() instantané : indispensable pour les
+// contenus chargés en asynchrone (onglets, tables, cartes de cabinet, résultats d'analyse).
+export async function voir(page, texte, opts = {}) {
+  const loc = page.getByText(texte, { exact: false }).first();
+  try { await loc.waitFor({ state: 'visible', timeout: opts.timeout || 8000 }); }
+  catch { throw new Attendu(`attendu visible : « ${texte} »`); }
+}
+export async function absent(page, texte) {
+  await page.waitForTimeout(400);  // laisse le rendu se stabiliser avant de compter
+  const n = await page.getByText(texte, { exact: false }).count();
+  if (n > 0) throw new Attendu(`attendu ABSENT mais présent : « ${texte} »`);
+}
+// Ouvre le tiroir « Mon cabinet » puis sélectionne un cabinet (ses membres/dossiers
+// n'apparaissent qu'après clic sur la carte).
+export async function ouvrirCabinet(page, nom) {
+  await menuItem(page, 'Mon cabinet');
+  await page.locator('.drawer').getByText(nom, { exact: false }).first().click();
+  await page.waitForTimeout(600);
+}
+
+// ---- actions réutilisables ----
+export async function dismissOnboarding(page) {
+  try { await page.getByText('Passer', { exact: false }).first().click({ timeout: 2500 }); } catch {}
+}
+
+export async function ask(page, q) {
+  const input = page.locator('textarea').first();
+  await input.waitFor({ timeout: 8000 });
+  await input.fill(q);
+  const send = page.getByRole('button', { name: /Rechercher|Envoyer/ }).first();
+  if (await send.isVisible().catch(() => false)) await send.click();
+  else await input.press('Enter');
+}
+
+export async function login(page, email) {
+  await page.getByRole('button', { name: /Se connecter/ }).first().click();
+  const form = page.locator('form.auth-form');
+  await form.getByPlaceholder('vous@exemple.lu').fill(email);
+  await form.getByPlaceholder('8 caractères minimum').first().fill(MDP);
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(700);
+}
+
+// Navigue par le tiroir mobile (☰), toujours disponible quel que soit le viewport.
+export async function ouvrirMenu(page) {
+  await page.setViewportSize({ width: 420, height: 900 });
+  const b = page.getByRole('button', { name: 'Ouvrir le menu' });
+  if (await b.isVisible().catch(() => false)) await b.click();
+}
+export async function menuItem(page, texte) {
+  await ouvrirMenu(page);
+  await page.locator('.nav-drawer').getByText(texte, { exact: false }).first().click();
+  await page.waitForTimeout(700);
+}
+
+// ---- moteur d'un parcours ----
+export function makeRunner(results) {
+  return async function journey(browser, name, fn) {
+    if (ONLY && !name.includes(ONLY)) return;
+    const ctx = await browser.newContext({
+      viewport: { width: 1180, height: 900 },
+      permissions: ['clipboard-read', 'clipboard-write'],  // pour le parcours « Partager » (copie du lien)
+    });
+    const page = await ctx.newPage();
+    page.setDefaultTimeout(8000);
+    const bag = instrument(page);
+    const t0 = Date.now();
+    const rec = { name, ok: true, ms: 0 };
+    try { await fn(page, bag); await page.waitForTimeout(200); }
+    catch (e) { rec.ok = false; rec.error = String(e.message || e).split('\n')[0].slice(0, 220); }
+    rec.ms = Date.now() - t0;
+    try { rec.perf = await perf(page); } catch {}
+    rec.consoleIssues = bag.console.filter((c) => !c.text.includes('Deprecated API')).length;
+    rec.pageErrors = bag.errors.length;
+    rec.errorsSample = bag.errors.slice(0, 3);
+    rec.broken = bag.broken.slice(0, 6);
+    rec.requestCount = bag.requests.length;
+    try { await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); } catch {}
+    results.push(rec);
+    const flag = rec.ok ? '✓' : '✗';
+    console.log(`${flag} ${name} (${rec.ms}ms, ${rec.requestCount} req)${rec.ok ? '' : '  ← ' + rec.error}`);
+    await ctx.close();
+  };
+}

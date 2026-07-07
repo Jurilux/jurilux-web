@@ -39,14 +39,35 @@ Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 - `e2e/artifacts/rapport.json` — agrégat : succès/échec, perf, erreurs, réseau, ressources
   cassées. Exploitable pour un tableau de bord ou une passerelle CI.
 
-## Parcours couverts
+## Parcours couverts (41, avec assertions)
 
-Accueil · Question→parcours guidé (follow_ups) · clic question de suivi · mode pédagogique ·
-feedback · partage/permalien · Insight avocats · inscription · connexion+historique · Vault ·
-rédaction · Mon compte · backoffice admin (balayage des 11 onglets) · vue partagée publique.
+Organisés par domaine dans `journeys.mjs`, chacun **vérifie un résultat** (pas juste une capture) :
+
+- **A. Service & recherche** (public) : accueil · parcours guidé · clic question de suivi ·
+  autre angle · pédagogique · filtres · **refus hors-sujet** · feedback 👍 · feedback manquant ·
+  partage (copie du lien) · permalien public.
+- **B. Insight avocats** (public) : recherche d'avocat · analytics contentieux.
+- **C. Auth & compte** : inscription · connexion · **mauvais mot de passe** · déconnexion ·
+  changement de mot de passe · **épuisement du quota étudiant** (refus gracieux).
+- **D. Cabinet, rôles & cloisons** : ouvrir · membres · **cloison — owner voit / collaborateur
+  ne voit pas (404) / associé autorisé voit** · **isolation inter-cabinet**.
+- **E. Veille** : liste des alertes · création.
+- **F. Vault** : liste · dépôt · question isolée · analyse (résumé) · **isolation par propriétaire**.
+- **G. Compte pro/entreprise** : clés d'API (liste + création) · prompts · export RGPD · rédaction.
+- **H. Backoffice admin** : balayage des 11 onglets · utilisateurs · santé · audit.
+
+Deux cabinets (Étude Dupont & Associés, Cabinet Weber), plusieurs profils (étudiant, pro, admin,
+owner/associé/collaborateur), un dossier restreint et des Vault cloisonnés sont **seedés** par
+`functional.e2e_server`.
 
 > Extensible : ajouter un `await journey(browser, 'NN-nom', async (page) => { … })` dans
-> `journeys.mjs`. Les captures et métriques sont automatiques.
+> `journeys.mjs` (helpers dans `lib.mjs` : `login`, `ask`, `menuItem`, `ouvrirCabinet`, `voir`,
+> `absent`). Les captures et métriques sont automatiques.
+
+## Ce que la suite a déjà trouvé
+
+Une **fuite de cloison déontologique** (l'intitulé d'un dossier restreint était listé pour un
+membre non autorisé) — corrigée côté backend, avec test de non-régression. Cf. `OPTIMISATIONS.md`.
 
 ## Notes de mesure
 

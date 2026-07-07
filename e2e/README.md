@@ -39,7 +39,7 @@ Variables : `FRONT_URL` (défaut `http://127.0.0.1:5173`), `OUT_DIR` (défaut
 - `e2e/artifacts/rapport.json` — agrégat : succès/échec, perf, erreurs, réseau, ressources
   cassées. Exploitable pour un tableau de bord ou une passerelle CI.
 
-## Parcours couverts (72, avec assertions)
+## Parcours couverts (96, avec assertions)
 
 Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-navigateur » :
 - **Vague 2 — permissions & CRUD** : refus admin (non-admin/anonyme), Vault anonyme, contrôles
@@ -50,6 +50,14 @@ Le socle (A–H, ~41 parcours) plus les **vagues** qui poussent vers le « tout-
   sauvegarde en dossier, historique, fiche avocat, analytics par matière.
 - **Vague 5 — multi-acteurs** : nouveau client bout-en-bout ; collaboration cabinet ; cloison
   déontologique vérifiée sur 3 sessions (owner / collaborateur refusé / associé autorisé).
+- **Vague 6 — sous-actions admin** : changer plan, basculer admin, inspecteur/probe, banc
+  d'éval, PATCH config, suppression d'un compte.
+- **Vague 7 — destructifs & erreurs** : supprimer dossier, quitter cabinet, révoquer accès,
+  upload trop volumineux (413).
+- **Vague 8 — insight & admin avancés** : comparaison d'avocats, filtre matière, onglets
+  Questions/Retours/Corpus/Activité/Routage LLM, volumétrie corpus.
+- **Vague 9 — variantes & compléments** : nav anonyme restreinte, suppression de doc Vault,
+  vérification d'alertes, contenu de permalien, changement de mot de passe réussi.
 
 ### Socle A–H
 

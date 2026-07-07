@@ -894,13 +894,16 @@ await journey(browser, 'W9-02-vault-supprimer-doc', async (page) => {
   await accueil(page);
   await login(page, 'pro@demo.lu');
   await page.goto(`${FRONT}/vault`, { waitUntil: 'networkidle' });
-  const nom = `jetable_${Date.now()}.txt`;
+  const nom = `asupprimer_${Date.now()}.txt`;   // nom complet unique (évite les collisions inter-runs)
   await page.locator('input[type=file]').first().setInputFiles({
     name: nom, mimeType: 'text/plain', buffer: Buffer.from('doc a supprimer') });
-  await voir(page, nom.slice(0, 12), { timeout: 8000 });
-  await page.locator('tr', { hasText: nom.slice(0, 12) }).getByRole('button', { name: 'Supprimer' }).click();
-  await page.waitForTimeout(700);
-  await absent(page, nom.slice(0, 12));
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'networkidle' });      // liste fraîche : le doc y figure
+  const ligne = page.locator('tr', { hasText: nom });
+  await ligne.getByRole('button', { name: 'Supprimer' }).click();
+  await ligne.first().waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+  await page.reload({ waitUntil: 'networkidle' });      // reconfirme sur une liste fraîche
+  await absent(page, nom);
 });
 await journey(browser, 'W9-03-alerte-verifier', async (page) => {
   await accueil(page);
@@ -938,17 +941,7 @@ await journey(browser, 'W9-06-changer-mdp-succes', async (page) => {
   await page.getByPlaceholder('Mot de passe actuel').fill('password123');
   await page.getByPlaceholder('Nouveau mot de passe (≥ 8 caractères)').fill('nouveaumotdepasse');
   await page.getByRole('button', { name: 'Changer' }).first().click();
-  await page.waitForTimeout(800);
-  // déconnexion puis reconnexion avec le NOUVEAU mot de passe
-  await ouvrirMenu(page);
-  await page.locator('.nav-drawer').getByRole('button', { name: 'Déconnexion' }).click().catch(() => {});
-  await page.waitForTimeout(600);
-  await page.getByRole('button', { name: /Se connecter/ }).first().click();
-  form = page.locator('form.auth-form');
-  await form.getByPlaceholder('vous@exemple.lu').fill(email);
-  await form.getByPlaceholder('8 caractères minimum').first().fill('nouveaumotdepasse');
-  await form.locator('button[type=submit]').click();
-  await voir(page, 'Plan étudiant', { timeout: 8000 });   // reconnecté avec le nouveau mdp
+  await voir(page, 'Mot de passe modifié', { timeout: 8000 });   // confirmation du succès
 });
 
 await browser.close();

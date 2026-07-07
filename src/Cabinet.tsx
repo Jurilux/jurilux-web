@@ -2,7 +2,8 @@ import { useEffect, useState, FormEvent } from 'react';
 import {
   listWorkspaces, createWorkspace, listMembers, addMember, setMemberRole, removeMember,
   deleteWorkspace, leaveWorkspace, listDossiers, createDossier, deleteDossier,
-  listDossierItems, addDossierItem, Workspace, Member, Dossier, DossierItem, Citation,
+  listDossierItems, addDossierItem, restrictDossier, grantDossierAccess, revokeDossierAccess,
+  Workspace, Member, Dossier, DossierItem, Citation,
 } from './api';
 
 // Modale « Enregistrer dans un dossier » : range une réponse sourcée dans un dossier partagé.
@@ -230,13 +231,19 @@ function WorkspaceView({ ws, onBack, onOpenDossier }:
         ) : (
           <ul className="hist-list">
             {dossiers.map((d) => (
-              <li key={d.id} className="dossier-li">
-                <button className="hist-item" onClick={() => onOpenDossier(d)}>
-                  <span className="hist-q">{d.name}</span>
-                  <span className="hist-meta">{d.items} réponse{d.items > 1 ? 's' : ''}</span>
-                </button>
-                {canAdmin && <button className="dossier-del" title="Supprimer le dossier"
-                  onClick={() => delDossier(d.id)}>✕</button>}
+              <li key={d.id}>
+                <div className="dossier-li">
+                  <button className="hist-item" onClick={() => onOpenDossier(d)}>
+                    <span className="hist-q">{d.restricted ? '🔒 ' : ''}{d.name}</span>
+                    <span className="hist-meta">{d.items} réponse{d.items > 1 ? 's' : ''}
+                      {d.restricted ? ' · restreint' : ''}</span>
+                  </button>
+                  {canAdmin && <button className="dossier-del" title="Supprimer le dossier"
+                    onClick={() => delDossier(d.id)}>✕</button>}
+                </div>
+                {canAdmin && (
+                  <DossierRestrictControls dossier={d} members={members} onChanged={load} />
+                )}
               </li>
             ))}
           </ul>
@@ -247,6 +254,73 @@ function WorkspaceView({ ws, onBack, onOpenDossier }:
         </form>
       </div>
     </>
+  );
+}
+
+// Cloison déontologique : un owner/admin peut restreindre un dossier (conflits d'intérêts)
+// puis accorder/révoquer nominativement l'accès des membres du cabinet.
+function DossierRestrictControls({ dossier, members, onChanged }:
+  { dossier: Dossier; members: Member[] | null; onChanged: () => void }) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const toggle = async () => {
+    setBusy(true); setMsg(null);
+    try { await restrictDossier(dossier.id, !dossier.restricted); onChanged(); }
+    catch (e) { setMsg(e instanceof Error ? e.message : 'Échec'); }
+    finally { setBusy(false); }
+  };
+  const grant = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setBusy(true); setMsg(null);
+    try { await grantDossierAccess(dossier.id, email.trim()); setEmail(''); setMsg('✓ Accès accordé.'); }
+    catch (err) { setMsg(err instanceof Error ? err.message : 'Échec'); }
+    finally { setBusy(false); }
+  };
+  const revoke = async (uid: number) => {
+    setBusy(true); setMsg(null);
+    try { await revokeDossierAccess(dossier.id, uid); setMsg('✓ Accès révoqué.'); }
+    catch (err) { setMsg(err instanceof Error ? err.message : 'Échec'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="dossier-restrict">
+      <div className="cab-row">
+        <span className="muted small">
+          {dossier.restricted
+            ? '🔒 Dossier restreint : visible seulement des administrateurs de l\'espace et des membres explicitement autorisés (conflits d\'intérêts).'
+            : 'Dossier ouvert : visible de tous les membres du cabinet.'}
+        </span>
+        <button className="ghost small" disabled={busy} onClick={toggle}>
+          {dossier.restricted ? 'Ouvrir à tous' : 'Restreindre'}
+        </button>
+      </div>
+      {dossier.restricted && (
+        <>
+          <form onSubmit={grant} className="cab-form">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="Autoriser un membre (email)" />
+            <button className="ghost" type="submit" disabled={busy || !email.trim()}>Autoriser</button>
+          </form>
+          {members && members.some((m) => m.role === 'member') && (
+            <>
+              <p className="muted small">Révoquer l'accès d'un membre du cabinet :</p>
+              {members.filter((m) => m.role === 'member').map((m) => (
+                <div className="cab-row" key={m.user_id}>
+                  <span className="mono small">{m.email}</span>
+                  <button className="row-del" disabled={busy}
+                    onClick={() => revoke(m.user_id)}>Révoquer</button>
+                </div>
+              ))}
+            </>
+          )}
+        </>
+      )}
+      {msg && <p className="warn small">{msg}</p>}
+    </div>
   );
 }
 

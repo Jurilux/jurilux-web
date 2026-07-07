@@ -7,17 +7,21 @@ import './styles.css';
 // qui vient poser une question ne télécharge pas le code de l'admin ni du partage.
 const AdminApp = lazy(() => import('./Admin'));
 const InsightApp = lazy(() => import('./Insight'));
+const VaultApp = lazy(() => import('./Vault'));
 const SharedView = lazy(() => import('./Shared').then((m) => ({ default: m.SharedView })));
 
 // Routage minimal sans dépendance : /admin → backoffice, /insight → profiling avocats,
-// /r/<id> → réponse partagée, sinon l'app publique. Caddy sert index.html en fallback.
+// /vault → documents privés du cabinet, /r/<id> → réponse partagée, sinon l'app publique.
+// Caddy sert index.html en fallback.
 const path = window.location.pathname.replace(/\/+$/, '');
 const isAdmin = path === '/admin';
 const isInsight = path === '/insight';
+const isVault = path === '/vault';
 const shareMatch = path.match(/^\/r\/([A-Za-z0-9_-]+)$/);
 
 const route = isAdmin ? <AdminApp />
   : isInsight ? <InsightApp />
+  : isVault ? <VaultApp />
   : shareMatch ? <SharedView id={shareMatch[1]} />
   : <App />;
 

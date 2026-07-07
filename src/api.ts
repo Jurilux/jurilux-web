@@ -280,7 +280,7 @@ export interface Me { email: string; plan: string; is_admin: boolean; quota: Quo
 // ---------- V3 offre cabinet : espaces, membres, dossiers partagés ----------
 export interface Workspace { id: number; name: string; role: string; members: number; }
 export interface Member { user_id: number; email: string; role: string; created_at: string; }
-export interface Dossier { id: number; name: string; items: number; created_at?: string; }
+export interface Dossier { id: number; name: string; items: number; created_at?: string; restricted?: boolean; }
 export interface DossierItem {
   id: number; question: string; answer: string | null; citations: Citation[];
   status: string | null; created_at: string; added_by: string | null;

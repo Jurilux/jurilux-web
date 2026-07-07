@@ -2,12 +2,15 @@ import { useEffect, useState, FormEvent } from 'react';
 import {
   adminOverview, adminUsers, adminQuestions, adminFeedback, adminActivity, adminProbe, adminEval,
   adminSetPlan, adminSetAdmin, adminDeleteUser,
+  adminHealth, adminGetConfig, adminPatchConfig, adminAudit, adminPurge,
   adminLogin, logout, getStoredEmail, HttpError,
   AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit, EvalReport,
+  AdminHealth, AuditEntry,
 } from './api';
 
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
-type Tab = 'dashboard' | 'inspector' | 'eval' | 'users' | 'questions' | 'feedback' | 'corpus';
+type Tab = 'dashboard' | 'inspector' | 'eval' | 'users' | 'questions' | 'feedback' | 'corpus'
+  | 'health' | 'config' | 'audit';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
@@ -501,6 +504,239 @@ function CorpusTab({ ov, onRefresh, refreshing }: {
   );
 }
 
+// ---------- santé & observabilité ----------
+// libellés lisibles pour les compteurs techniques renvoyés par /api/admin/health
+const COUNT_LABELS: Record<string, string> = {
+  users: 'Comptes',
+  vault_documents: 'Documents Vault',
+  audit_log: 'Entrées de journal',
+  api_keys: 'Clés API',
+  questions: 'Questions loguées',
+  favorites: 'Favoris',
+};
+
+function HealthTab() {
+  const [data, setData] = useState<AdminHealth | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminHealth().then(setData).catch((e) =>
+      setError(e instanceof Error ? e.message : 'Échec'));
+  }, []);
+
+  if (error) return <div className="tab-body"><p className="warn">⚠ {error}</p></div>;
+  if (!data) return <div className="tab-body"><p className="muted">Chargement…</p></div>;
+
+  const routing = data.llm_routing;
+
+  return (
+    <div className="tab-body">
+      <div className="panel">
+        <div className="panel-title">Voyants système</div>
+        <div className="kv-grid">
+          <div className="kv"><span>Meilisearch</span>
+            <b className={data.meilisearch ? 'ok' : 'ko'}>{data.meilisearch ? 'en ligne' : 'hors ligne'}</b></div>
+          <div className="kv"><span>Clé LLM</span>
+            <b className={data.llm_configured ? 'ok' : 'ko'}>{data.llm_configured ? 'configurée' : 'absente'}</b></div>
+          <div className="kv"><span>Index — documents</span>
+            <b className="mono">{fmtNum(data.index.documents)}</b></div>
+          <div className="kv"><span>Indexation en cours</span>
+            <b>{data.index.is_indexing ? 'oui' : 'non'}</b></div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Routage LLM par sensibilité</div>
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>Sensibilité</th><th>Fournisseur</th><th>Modèle</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Public</td>
+                <td>{routing.public.fournisseur}</td>
+                <td className="mono">{routing.public.modele}</td>
+              </tr>
+              <tr>
+                <td>Confidentiel</td>
+                <td>{routing.confidentiel.fournisseur}</td>
+                <td className="mono">{routing.confidentiel.modele}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Compteurs</div>
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>Objet</th><th>Total</th></tr></thead>
+            <tbody>
+              {Object.entries(data.counts).map(([k, v]) => (
+                <tr key={k}>
+                  <td>{COUNT_LABELS[k] || k}</td>
+                  <td className="num">{fmtNum(v)}</td>
+                </tr>
+              ))}
+              {Object.keys(data.counts).length === 0 &&
+                <tr><td colSpan={2} className="muted">Aucun compteur.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- paramétrage runtime + rétention ----------
+function ConfigTab() {
+  const [config, setConfig] = useState<Record<string, unknown> | null>(null);
+  const [modifiables, setModifiables] = useState<string[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  const load = () => {
+    setError(null);
+    adminGetConfig().then((d) => {
+      setConfig(d.config);
+      setModifiables(d.modifiables);
+      const init: Record<string, string> = {};
+      for (const k of d.modifiables) init[k] = d.config[k] == null ? '' : String(d.config[k]);
+      setDrafts(init);
+    }).catch((e) => setError(e instanceof Error ? e.message : 'Échec'));
+  };
+  useEffect(load, []);
+
+  const apply = async (key: string) => {
+    setBusyKey(key); setError(null); setOkMsg(null);
+    try {
+      await adminPatchConfig({ [key]: drafts[key] });
+      setOkMsg(`« ${key} » appliqué.`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec');
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  // ---- rétention ----
+  const [days, setDays] = useState(365);
+  const [purgeBusy, setPurgeBusy] = useState(false);
+  const [purgeMsg, setPurgeMsg] = useState<string | null>(null);
+  const [purgeErr, setPurgeErr] = useState<string | null>(null);
+
+  const purge = async () => {
+    if (!window.confirm(
+      `Purger définitivement les données de plus de ${days} jours ? Cette action est irréversible.`)) return;
+    setPurgeBusy(true); setPurgeErr(null); setPurgeMsg(null);
+    try {
+      const r = await adminPurge(days);
+      const lines = Object.entries(r.deleted).map(([k, v]) => `${k} : ${fmtNum(v)}`).join(' · ');
+      setPurgeMsg(`Purge avant ${r.before} — ${lines || 'rien à supprimer'}.`);
+    } catch (e) {
+      setPurgeErr(e instanceof Error ? e.message : 'Échec');
+    } finally {
+      setPurgeBusy(false);
+    }
+  };
+
+  if (error && !config) return <div className="tab-body"><p className="warn">⚠ {error}</p></div>;
+  if (!config) return <div className="tab-body"><p className="muted">Chargement…</p></div>;
+
+  return (
+    <div className="tab-body">
+      <div className="panel">
+        <div className="panel-title">Paramétrage runtime</div>
+        <p className="muted small">Réglages modifiables à chaud. Seules les clés listées comme modifiables sont éditables.</p>
+        {okMsg && <p className="ok small">✓ {okMsg}</p>}
+        {error && <p className="warn">⚠ {error}</p>}
+        {modifiables.length === 0 && <p className="muted small">Aucun paramètre modifiable.</p>}
+        {modifiables.map((k) => (
+          <div className="bar-row" key={k} style={{ alignItems: 'center', gap: 8 }}>
+            <div className="bar-label mono" style={{ minWidth: 220 }}>{k}</div>
+            <input
+              value={drafts[k] ?? ''}
+              onChange={(e) => setDrafts((d) => ({ ...d, [k]: e.target.value }))}
+              disabled={busyKey === k}
+              style={{ flex: 1 }}
+            />
+            <button className="send" onClick={() => apply(k)} disabled={busyKey === k}>
+              {busyKey === k ? '…' : 'Appliquer'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Rétention des données</div>
+        <p className="muted small">Suppression des données antérieures à un seuil (jours). Opération destructive et irréversible.</p>
+        <div className="probe-form">
+          <input type="number" min={1} value={days}
+            onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))}
+            style={{ maxWidth: 140 }} />
+          <button className="row-del" onClick={purge} disabled={purgeBusy}>
+            {purgeBusy ? 'Purge…' : `Purger > ${days} j`}
+          </button>
+        </div>
+        {purgeErr && <p className="warn">⚠ {purgeErr}</p>}
+        {purgeMsg && <p className="ok small">✓ {purgeMsg}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ---------- journal d'audit ----------
+function AuditTab() {
+  const [rows, setRows] = useState<AuditEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [action, setAction] = useState('');
+
+  const load = (filter = '') => {
+    setRows(null); setError(null);
+    adminAudit(200, filter).then(setRows).catch((e) =>
+      setError(e instanceof Error ? e.message : 'Échec'));
+  };
+  useEffect(() => { load(); }, []);
+
+  const submit = (e: FormEvent) => { e.preventDefault(); load(action.trim()); };
+
+  return (
+    <div className="tab-body">
+      <p className="muted small">Traçabilité des actions administratives et sensibles (200 dernières entrées).</p>
+      <form className="probe-form" onSubmit={submit}>
+        <input value={action} onChange={(e) => setAction(e.target.value)}
+          placeholder="Filtrer par action (préfixe, ex : user.)" />
+        <button className="send" type="submit">Filtrer</button>
+      </form>
+
+      {error && <p className="warn">⚠ {error}</p>}
+      {!rows && !error && <p className="muted">Chargement…</p>}
+      {rows && (
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>Date</th><th>Compte</th><th>Action</th><th>Détail</th><th>IP</th></tr></thead>
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.id}>
+                  <td className="muted nowrap">{fmtDate(a.ts)}</td>
+                  <td className="mono nowrap">{a.email || '—'}</td>
+                  <td className="mono">{a.action}</td>
+                  <td className="q-preview">{a.detail || '—'}</td>
+                  <td className="mono muted nowrap">{a.ip || '—'}</td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={5} className="muted">Aucune entrée.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- app ----------
 export default function AdminApp() {
   const [phase, setPhase] = useState<Phase>('loading');
@@ -554,6 +790,9 @@ export default function AdminApp() {
     { key: 'questions', label: 'Questions' },
     { key: 'feedback', label: 'Retours' },
     { key: 'corpus', label: 'Corpus' },
+    { key: 'health', label: 'Santé' },
+    { key: 'config', label: 'Paramétrage' },
+    { key: 'audit', label: 'Audit' },
   ];
 
   return (
@@ -582,6 +821,9 @@ export default function AdminApp() {
         {tab === 'questions' && <Questions />}
         {tab === 'feedback' && <FeedbackTab />}
         {ov && tab === 'corpus' && <CorpusTab ov={ov} onRefresh={refresh} refreshing={refreshing} />}
+        {tab === 'health' && <HealthTab />}
+        {tab === 'config' && <ConfigTab />}
+        {tab === 'audit' && <AuditTab />}
       </main>
     </div>
   );

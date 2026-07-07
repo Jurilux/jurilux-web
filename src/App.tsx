@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, Suspense, lazy, FormEvent } from 'react';
 import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
-  getStoredEmail, listAlerts, createAlert, AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
+  getStoredEmail, listAlerts, createAlert, oidcEnabled, oidcLogin, captureOidcToken,
+  AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { Onboarding, shouldOnboard } from './Onboarding';
 
@@ -9,6 +10,8 @@ const LegalPage = lazy(() => import('./Legal').then((m) => ({ default: m.LegalPa
 const Cabinet = lazy(() => import('./Cabinet').then((m) => ({ default: m.Cabinet })));
 const SaveToDossierModal = lazy(() => import('./Cabinet').then((m) => ({ default: m.SaveToDossierModal })));
 const Alerts = lazy(() => import('./Alerts').then((m) => ({ default: m.Alerts })));
+const Draft = lazy(() => import('./Draft').then((m) => ({ default: m.Draft })));
+const Account = lazy(() => import('./Account').then((m) => ({ default: m.Account })));
 
 interface Message {
   id: string;
@@ -407,6 +410,8 @@ function AuthModal({ onClose, onAuth }: { onClose: () => void; onAuth: (email: s
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sso, setSso] = useState(false);   // SSO du cabinet disponible ?
+  useEffect(() => { oidcEnabled().then(setSso); }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -445,6 +450,11 @@ function AuthModal({ onClose, onAuth }: { onClose: () => void; onAuth: (email: s
             {busy ? '…' : mode === 'login' ? 'Se connecter' : "S'inscrire"}
           </button>
         </form>
+        {sso && (
+          <button className="ghost sso-btn" onClick={oidcLogin} style={{ width: '100%', marginTop: 10 }}>
+            🏛️ Se connecter via le SSO du cabinet
+          </button>
+        )}
         <p className="muted switch">
           {mode === 'login' ? "Pas encore de compte ? " : 'Déjà un compte ? '}
           <button className="linklike" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
@@ -529,6 +539,7 @@ export default function App() {
   const [pedagogical, setPedagogical] = useState(false);
 
   useEffect(() => {
+    captureOidcToken();  // retour SSO : le backend a placé le jeton en fragment (#token=…)
     if (getStoredEmail()) me().then((a) => {
       if (a) { setAccount(a); setUser(a.email); }
       else { clearSession(); setUser(null); }  // token expiré
@@ -546,6 +557,10 @@ export default function App() {
   const [saveItem, setSaveItem] = useState<Message | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const openAlerts = () => { setMenuOpen(false); setAlertsOpen(true); };
+  const [draftOpen, setDraftOpen] = useState(false);
+  const openDraft = () => { setMenuOpen(false); setDraftOpen(true); };
+  const [accountOpen, setAccountOpen] = useState(false);
+  const openAccount = () => { setMenuOpen(false); setAccountOpen(true); };
   const [alertUnseen, setAlertUnseen] = useState(0);
   const refreshAlerts = () => { if (getStoredEmail()) listAlerts().then((a) => setAlertUnseen(a.reduce((n, x) => n + x.unseen, 0))).catch(() => {}); };
   useEffect(refreshAlerts, []);
@@ -792,9 +807,12 @@ export default function App() {
               <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
               {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
               {user && <button className="nav-item" onClick={openCabinet}>🗂️ Mon cabinet <span className="muted">— dossiers partagés</span></button>}
+              {user && <a className="nav-item" href="/vault">🔒 Vault <span className="muted">— vos documents privés</span></a>}
+              {user && <button className="nav-item" onClick={openDraft}>✍️ Rédiger <span className="muted">— brouillon sourcé</span></button>}
               {user && <button className="nav-item" onClick={openAlerts}>🔔 Mes alertes {alertUnseen > 0 && <span className="alert-badge">{alertUnseen}</span>} <span className="muted">— veille</span></button>}
               <a className="nav-item nav-admin" href="/insight">⚖️ Insight <span className="muted">— avocats</span></a>
               {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
+              {user && <button className="nav-item" onClick={openAccount}>⚙️ Mon compte <span className="muted">— clés, prompts, données</span></button>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
               <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
             </nav>
@@ -846,6 +864,8 @@ export default function App() {
           question: saveItem.question || '', answer: saveItem.content || null,
           citations: saveItem.citations || [], status: saveItem.status,
         }} />}
+        {draftOpen && <Draft onClose={() => setDraftOpen(false)} />}
+        {accountOpen && <Account onClose={() => setAccountOpen(false)} />}
       </Suspense>
 
       {histOpen && (

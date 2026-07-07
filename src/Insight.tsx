@@ -1,7 +1,8 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
-  insightStats, insightMatters, insightLawyers, insightLawyer, adminLogin, logout, getStoredEmail, HttpError,
-  InsightLawyer, InsightProfile, InsightCase, InsightMatter,
+  insightStats, insightMatters, insightLawyers, insightLawyer, insightAnalytics,
+  adminLogin, logout, getStoredEmail, HttpError,
+  InsightLawyer, InsightProfile, InsightCase, InsightMatter, Analytics, AnalyticsRow,
 } from './api';
 import { jurisCourt, jurisDate, jurisRef } from './juridictions';
 
@@ -68,6 +69,7 @@ function InsightLogin({ onDone }: { onDone: () => void }) {
 function InsightMain({ stats, onLogout }: {
   stats: { lawyers: number; appearances: number } | null; onLogout: () => void;
 }) {
+  const [view, setView] = useState<'avocats' | 'analytics'>('avocats');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('cases');
   const [matter, setMatter] = useState('');
@@ -94,12 +96,19 @@ function InsightMain({ stats, onLogout }: {
   return (
     <div className="insight">
       <header className="admin-header">
-        <strong className="admin-brand">⚖️ Insight <span className="muted">— avocats</span></strong>
-        <div className="admin-tabs" />
+        <strong className="admin-brand">⚖️ Insight</strong>
+        <div className="admin-tabs">
+          <button className={`ghost ${view === 'avocats' ? 'active' : ''}`}
+            onClick={() => setView('avocats')}>Avocats</button>
+          <button className={`ghost ${view === 'analytics' ? 'active' : ''}`}
+            onClick={() => setView('analytics')}>Analytics contentieux</button>
+        </div>
         <a className="ghost" href="/">← Application</a>
         <button className="ghost" onClick={onLogout}>Déconnexion</button>
       </header>
       <main className="admin-main">
+        {view === 'analytics' ? <AnalyticsView /> : (
+        <>
         <div className="insight-note">
           <b>Profilage limité aux avocats</b>, à partir des décisions <b>publiques</b> de jurisprudence.
           Usage interne (base légale : intérêt légitime — aucune rediffusion). Volontairement <b>pas</b> de
@@ -164,8 +173,92 @@ function InsightMain({ stats, onLogout }: {
             )}
           </>
         )}
+        </>
+        )}
       </main>
       <footer className="insight-foot">Insight — maquette interne <span className="version">{APP_VERSION}</span></footer>
+    </div>
+  );
+}
+
+function pctFmt(r: number | null): string {
+  return r == null ? '—' : `${Math.round(r * 100)} %`;
+}
+
+function AnalyticsTable({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
+  return (
+    <>
+      <h3>{title}</h3>
+      {rows.length === 0 ? (
+        <p className="muted">Aucune donnée.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="compare-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>affaires</th>
+                <th>estimées</th>
+                <th>gagnées</th>
+                <th>taux</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={String(r.cle)}>
+                  <td className="cmp-label">{r.cle}</td>
+                  <td>{r.cases}</td>
+                  <td>{r.decided}</td>
+                  <td>{r.won}</td>
+                  <td>{pctFmt(r.win_rate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AnalyticsView() {
+  const [data, setData] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    insightAnalytics()
+      .then(setData)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Erreur'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p className="muted">Chargement…</p>;
+  if (error) return <p className="warn">⚠ {error}</p>;
+  if (!data) return <p className="muted">Aucune donnée.</p>;
+
+  const o = data.overall;
+  return (
+    <div className="insight-analytics">
+      <h2>Analytics contentieux</h2>
+      <div className="stat-grid">
+        <div className="stat-tile"><div className="stat-label">affaires</div><div className="stat-value">{o.cases.toLocaleString('fr-FR')}</div></div>
+        <div className="stat-tile"><div className="stat-label">issues estimables</div><div className="stat-value">{o.decided.toLocaleString('fr-FR')}</div></div>
+        <div className="stat-tile"><div className="stat-label">gagnées</div><div className="stat-value">{o.won.toLocaleString('fr-FR')}</div></div>
+        <div className="stat-tile"><div className="stat-label">taux de succès<sup>*</sup></div><div className="stat-value">{pctFmt(o.win_rate)}</div></div>
+        <div className="stat-tile"><div className="stat-label">avocats</div><div className="stat-value">{o.lawyers.toLocaleString('fr-FR')}</div></div>
+      </div>
+
+      <AnalyticsTable title="Par matière" rows={data.by_matter} />
+      <AnalyticsTable title="Par juridiction" rows={data.by_juridiction} />
+      <AnalyticsTable title="Par année" rows={data.by_year} />
+
+      <p className="muted wl-legend">
+        <sup>*</sup> Taux de succès <b>estimé</b> (indicatif), données publiques de jurisprudence,
+        avocats/parties uniquement — jamais de magistrats. Montants à venir.
+      </p>
     </div>
   );
 }

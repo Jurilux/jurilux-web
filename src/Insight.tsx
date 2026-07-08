@@ -1,8 +1,10 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
   insightStats, insightMatters, insightLawyers, insightLawyer, insightAnalytics,
+  insightFirms, insightFirm, insightArticles, insightRgpdRequest, insightExportUrl,
   adminLogin, logout, getStoredEmail, HttpError,
   InsightLawyer, InsightProfile, InsightCase, InsightMatter, Analytics, AnalyticsRow,
+  InsightFirm, InsightFirmProfile, InsightArticle,
 } from './api';
 import { jurisCourt, jurisDate, jurisRef } from './juridictions';
 
@@ -69,7 +71,7 @@ function InsightLogin({ onDone }: { onDone: () => void }) {
 function InsightMain({ stats, onLogout }: {
   stats: { lawyers: number; appearances: number } | null; onLogout: () => void;
 }) {
-  const [view, setView] = useState<'avocats' | 'analytics'>('avocats');
+  const [view, setView] = useState<'avocats' | 'cabinets' | 'analytics' | 'methodo'>('avocats');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('cases');
   const [matter, setMatter] = useState('');
@@ -100,14 +102,20 @@ function InsightMain({ stats, onLogout }: {
         <div className="admin-tabs">
           <button className={`ghost ${view === 'avocats' ? 'active' : ''}`}
             onClick={() => setView('avocats')}>Avocats</button>
+          <button className={`ghost ${view === 'cabinets' ? 'active' : ''}`}
+            onClick={() => setView('cabinets')}>Cabinets</button>
           <button className={`ghost ${view === 'analytics' ? 'active' : ''}`}
             onClick={() => setView('analytics')}>Analytics contentieux</button>
+          <button className={`ghost ${view === 'methodo' ? 'active' : ''}`}
+            onClick={() => setView('methodo')}>Méthodologie & RGPD</button>
         </div>
         <a className="ghost" href="/">← Application</a>
         <button className="ghost" onClick={onLogout}>Déconnexion</button>
       </header>
       <main className="admin-main">
-        {view === 'analytics' ? <AnalyticsView /> : (
+        {view === 'methodo' ? <MethodoView /> :
+         view === 'cabinets' ? <FirmsView onOpenLawyer={(k) => { setView('avocats'); open(k); }} /> :
+         view === 'analytics' ? <AnalyticsView /> : (
         <>
         <div className="insight-note">
           <b>Profilage limité aux avocats</b>, à partir des décisions <b>publiques</b> de jurisprudence.
@@ -144,6 +152,8 @@ function InsightMain({ stats, onLogout }: {
                 <option value="recent">Tri : activité récente</option>
                 <option value="winrate">Tri : taux estimé favorable</option>
               </select>
+              <a className="ghost" href={insightExportUrl(q, sort, matter)}
+                title="Exporter la liste filtrée (tableur)">⬇ CSV</a>
             </div>
             {list && (
               <p className="insight-count muted">
@@ -185,7 +195,18 @@ function pctFmt(r: number | null): string {
   return r == null ? '—' : `${Math.round(r * 100)} %`;
 }
 
+function euroFmt(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+}
+
+function delaiFmt(j: number | null | undefined): string {
+  if (j == null) return '—';
+  return j >= 60 ? `${Math.round(j / 30)} mois` : `${j} j`;
+}
+
 function AnalyticsTable({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
+  const hasAmounts = rows.some((r) => r.amount_median != null);
   return (
     <>
       <h3>{title}</h3>
@@ -201,6 +222,7 @@ function AnalyticsTable({ title, rows }: { title: string; rows: AnalyticsRow[] }
                 <th>estimées</th>
                 <th>gagnées</th>
                 <th>taux</th>
+                {hasAmounts && <th>montant méd.<sup>*</sup></th>}
               </tr>
             </thead>
             <tbody>
@@ -211,6 +233,7 @@ function AnalyticsTable({ title, rows }: { title: string; rows: AnalyticsRow[] }
                   <td>{r.decided}</td>
                   <td>{r.won}</td>
                   <td>{pctFmt(r.win_rate)}</td>
+                  {hasAmounts && <td title={r.amount_n ? `sur ${r.amount_n} décision(s) à montant détecté` : ''}>{euroFmt(r.amount_median)}</td>}
                 </tr>
               ))}
             </tbody>
@@ -249,16 +272,192 @@ function AnalyticsView() {
         <div className="stat-tile"><div className="stat-label">gagnées</div><div className="stat-value">{o.won.toLocaleString('fr-FR')}</div></div>
         <div className="stat-tile"><div className="stat-label">taux de succès<sup>*</sup></div><div className="stat-value">{pctFmt(o.win_rate)}</div></div>
         <div className="stat-tile"><div className="stat-label">avocats</div><div className="stat-value">{o.lawyers.toLocaleString('fr-FR')}</div></div>
+        {o.amount_median != null && (
+          <div className="stat-tile" title={`médiane sur ${o.amount_n ?? '?'} décision(s) à montant détecté — indicatif`}>
+            <div className="stat-label">montant médian<sup>*</sup></div><div className="stat-value">{euroFmt(o.amount_median)}</div>
+          </div>
+        )}
+        {o.delai_median != null && (
+          <div className="stat-tile" title={`médiane sur ${o.delai_n ?? '?'} décision(s) à délai estimable — indicatif`}>
+            <div className="stat-label">délai médian<sup>*</sup></div><div className="stat-value">{delaiFmt(o.delai_median)}</div>
+          </div>
+        )}
       </div>
 
       <AnalyticsTable title="Par matière" rows={data.by_matter} />
       <AnalyticsTable title="Par juridiction" rows={data.by_juridiction} />
       <AnalyticsTable title="Par année" rows={data.by_year} />
+      <ArticlesTable />
 
       <p className="muted wl-legend">
-        <sup>*</sup> Taux de succès <b>estimé</b> (indicatif), données publiques de jurisprudence,
-        avocats/parties uniquement — jamais de magistrats. Montants à venir.
+        <sup>*</sup> Taux de succès, montants et délais <b>estimés</b> (indicatifs — heuristiques sur le
+        dispositif), données publiques de jurisprudence, avocats/parties uniquement — jamais de magistrats.
       </p>
+    </div>
+  );
+}
+
+// Textes de loi les plus visés dans les décisions analysées (extraction déterministe).
+function ArticlesTable() {
+  const [rows, setRows] = useState<InsightArticle[] | null>(null);
+  useEffect(() => { insightArticles(15).then(setRows).catch(() => setRows([])); }, []);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <>
+      <h3>Articles les plus visés</h3>
+      <div className="table-wrap">
+        <table className="compare-table">
+          <thead><tr><th>article / texte</th><th>décisions</th></tr></thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.article}><td className="cmp-label">{a.article}</td><td>{a.decisions}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+// ---------- Cabinets (dimension B2B) : uniquement les cabinets EXPLICITEMENT nommés ----------
+function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
+  const [q, setQ] = useState('');
+  const [list, setList] = useState<InsightFirm[] | null>(null);
+  const [sel, setSel] = useState<InsightFirmProfile | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => { insightFirms(q, 80).then(setList).catch(() => setList([])); }, q ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  if (sel) {
+    return (
+      <div className="insight-profile">
+        <button className="back linklike" onClick={() => setSel(null)}>← Tous les cabinets</button>
+        <h2>{sel.firm}</h2>
+        <div className="stat-grid">
+          <div className="stat-tile"><div className="stat-label">décisions</div><div className="stat-value">{sel.cases_count}</div></div>
+          <div className="stat-tile"><div className="stat-label">avocats</div><div className="stat-value">{sel.lawyers_count}</div></div>
+          <div className="stat-tile"><div className="stat-label">issue estimée<sup>*</sup></div><div className="stat-value">{pctFmt(sel.win_rate)}</div></div>
+          <div className="stat-tile"><div className="stat-label">période</div><div className="stat-value">{yearsSpan(sel.first_year, sel.last_year)}</div></div>
+          {sel.amount_median != null && (
+            <div className="stat-tile"><div className="stat-label">montant médian<sup>*</sup></div><div className="stat-value">{euroFmt(sel.amount_median)}</div></div>
+          )}
+        </div>
+        {sel.matters.length > 0 && (
+          <div className="insight-chips prof-matters">
+            {sel.matters.slice(0, 6).map((m) => (
+              <span key={m.name} className="chip matter-chip">{m.name} <span className="cochip-n">{m.count}</span></span>
+            ))}
+          </div>
+        )}
+        <h3>Avocats du cabinet</h3>
+        <ol className="insight-list">
+          {sel.lawyers.map((l) => (
+            <li key={l.name_key}>
+              <button className="lw-row lw-row-simple" onClick={() => onOpenLawyer(l.name_key)}>
+                <span className="lw-name">{l.name}</span>
+                <span className="lw-count">{l.cases}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <p className="muted wl-legend"><i>Cabinets = mentions EXPLICITES (« Étude X ») — couverture partielle du corpus. Taux/montants estimés, indicatifs.</i></p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="insight-firms">
+      <div className="insight-note">
+        <b>Cabinets explicitement nommés</b> dans les décisions (« Étude X », « Cabinet Y ») — couverture
+        partielle : beaucoup de décisions ne citent que l'avocat. Mêmes garde-fous que les avocats.
+      </div>
+      <div className="insight-toolbar">
+        <input className="insight-search" placeholder="Rechercher un cabinet…" value={q}
+          onChange={(e) => setQ(e.target.value)} autoFocus />
+      </div>
+      {!list ? <p className="muted">Chargement…</p> : list.length === 0 ? (
+        <p className="muted insight-empty">Aucun cabinet{q ? ` pour « ${q} »` : ' détecté (le build insight n’a peut-être pas encore tourné)'}.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="compare-table">
+            <thead><tr><th>cabinet</th><th>décisions</th><th>avocats</th><th>taux estimé<sup>*</sup></th><th></th></tr></thead>
+            <tbody>
+              {list.map((f) => (
+                <tr key={f.firm}>
+                  <td className="cmp-label">{f.firm}</td>
+                  <td>{f.cases}</td>
+                  <td>{f.lawyers}</td>
+                  <td>{pctFmt(f.win_rate)}</td>
+                  <td><button className="linklike" onClick={() => insightFirm(f.firm).then(setSel)}>ouvrir →</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Méthodologie & droits RGPD (jurimétrie, base légale, opposition) ----------
+function MethodoView() {
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState('opposition');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
+  const [err, setErr] = useState('');
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setState('busy');
+    try { await insightRgpdRequest(name.trim(), kind, email.trim(), message.trim()); setState('done'); }
+    catch (ex) { setErr(ex instanceof Error ? ex.message : 'Échec'); setState('err'); }
+  };
+
+  return (
+    <div className="insight-methodo">
+      <h2>Méthodologie & droits RGPD</h2>
+      <div className="insight-note">
+        <p><b>Jurimétrie, pas justice prédictive.</b> Les indicateurs (issue estimée, montants, délais)
+        sont des <b>statistiques indicatives</b> produites par des heuristiques déterministes (regex sur le
+        dispositif des décisions publiques) — aucune IA générative, aucune certitude, aucun pronostic.</p>
+        <p><b>Périmètre :</b> avocats (« Maître X ») et cabinets explicitement nommés, à partir de la
+        jurisprudence <b>publique</b> (open-data). <b>Jamais de magistrats ni de greffiers</b> (art. 33 de
+        la loi française 2019-222 pour comparaison ; position CNPD). Base légale : intérêt légitime,
+        données déjà publiques, finalité d'information professionnelle.</p>
+        <p><b>Limites connues :</b> homonymies possibles, issue « gagné/perdu » simplificatrice (gains
+        partiels, renvois), montants détectés sur une fraction des décisions seulement.</p>
+      </div>
+
+      <h3>Exercer vos droits (avocat profilé)</h3>
+      <p className="muted">Accès, rectification ou opposition au profilage de votre nom — traité manuellement, réponse sous 30 jours.</p>
+      {state === 'done' ? (
+        <p className="insight-note">✅ <b>Demande enregistrée.</b> Elle sera traitée dans les meilleurs délais.</p>
+      ) : (
+        <form className="auth-form rgpd-form" onSubmit={submit}>
+          <label>Nom concerné (tel qu'affiché)
+            <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Maître Prénom NOM" />
+          </label>
+          <label>Demande
+            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="opposition">Opposition au profilage</option>
+              <option value="rectification">Rectification</option>
+              <option value="acces">Accès à mes données</option>
+            </select>
+          </label>
+          <label>E-mail de contact (optionnel)
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.lu" />
+          </label>
+          <label>Précisions (optionnel)
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
+          </label>
+          {state === 'err' && <p className="warn">⚠ {err}</p>}
+          <button className="send" disabled={state === 'busy'}>{state === 'busy' ? '…' : 'Envoyer la demande'}</button>
+        </form>
+      )}
     </div>
   );
 }
@@ -290,6 +489,7 @@ function Profile({ p, onBack, onOpen, onCompare }: {
         </div>
       </div>
       <h2>{p.name}</h2>
+      {p.firm && <p className="muted insight-firm">Cabinet : <b>{p.firm}</b></p>}
       {p.matters.length > 0 && (
         <div className="insight-chips prof-matters">
           {p.matters.slice(0, 6).map((m) => (
@@ -303,6 +503,12 @@ function Profile({ p, onBack, onOpen, onCompare }: {
         <div className="stat-tile"><div className="stat-label">juridictions</div><div className="stat-value">{courts.length}</div></div>
         <div className="stat-tile"><div className="stat-label">issue estimée<sup>*</sup></div>
           <div className="stat-value">{winPct == null ? '—' : `${winPct}%`}</div></div>
+        {p.amount_median != null && (
+          <div className="stat-tile" title={`médiane sur ${p.amount_n} décision(s) à montant détecté — indicatif`}>
+            <div className="stat-label">montant médian<sup>*</sup></div>
+            <div className="stat-value">{euroFmt(p.amount_median)}</div>
+          </div>
+        )}
       </div>
 
       {(p.as_demandeur > 0 || p.as_defendeur > 0) && (

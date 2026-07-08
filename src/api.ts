@@ -422,6 +422,7 @@ export interface InsightMatter { name: string; count: number; }
 export interface InsightProfile {
   name_key: string; name: string; cases_count: number; first_year: number | null; last_year: number | null;
   as_demandeur: number; as_defendeur: number; won: number; lost: number; decided: number;
+  amount_median?: number | null; amount_n?: number; firm?: string | null;
   matters: InsightMatter[]; cocounsel: InsightCoCounsel[]; cases: InsightCase[];
 }
 export const insightStats = () => adminGet<{ lawyers: number; appearances: number }>('/api/insight/stats');
@@ -548,11 +549,43 @@ export const draft = (instruction: string, topK = 12, filters: SearchFilters = {
     '/api/draft', 'POST', { instruction, topK, filters });
 
 // ---------- Analytics contentieux (public) ----------
-export interface AnalyticsRow { cle: string | number; cases: number; decided: number; won: number; win_rate: number | null; }
+export interface AnalyticsRow { cle: string | number; cases: number; decided: number; won: number; win_rate: number | null;
+  amount_median?: number | null; amount_n?: number; delai_median?: number | null; delai_n?: number; }
 export interface Analytics {
-  overall: { cases: number; decided: number; won: number; win_rate: number | null; lawyers: number };
+  overall: { cases: number; decided: number; won: number; win_rate: number | null; lawyers: number;
+    amount_median?: number | null; amount_n?: number; delai_median?: number | null; delai_n?: number };
   by_matter: AnalyticsRow[]; by_juridiction: AnalyticsRow[]; by_year: AnalyticsRow[];
 }
+// ---------- Insight : cabinets, articles, droits RGPD, export (fusion du produit insight) ----------
+export interface InsightFirm { firm: string; cases: number; lawyers: number; won: number; decided: number; win_rate: number | null; }
+export interface InsightFirmProfile {
+  firm: string; cases_count: number; lawyers_count: number; won: number; lost: number; decided: number;
+  win_rate: number | null; amount_median: number | null; amount_n: number;
+  first_year: number | null; last_year: number | null;
+  matters: InsightMatter[]; lawyers: { name_key: string; name: string; cases: number }[];
+}
+export const insightFirms = (q = '', limit = 50) =>
+  adminGet<{ items: InsightFirm[] }>(`/api/insight/firms?limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
+    .then((d) => d.items);
+export const insightFirm = (name: string) =>
+  adminGet<InsightFirmProfile>(`/api/insight/firms/${encodeURIComponent(name)}`);
+export interface InsightArticle { article: string; decisions: number; }
+export const insightArticles = (limit = 15) =>
+  adminGet<{ items: InsightArticle[] }>(`/api/insight/articles?limit=${limit}`).then((d) => d.items);
+export async function insightRgpdRequest(name: string, kind: string, email?: string, message?: string): Promise<void> {
+  const res = await fetch('/api/insight/rgpd-request', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, kind, email: email || null, message: message || null }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+}
+export const insightExportUrl = (q = '', sort = 'cases', matter = '', limit = 200) =>
+  '/api/insight/export/lawyers.csv?limit=' + limit + '&sort=' + sort
+  + (q ? `&q=${encodeURIComponent(q)}` : '') + (matter ? `&matter=${encodeURIComponent(matter)}` : '');
+
 export const insightAnalytics = (matter = '', juridiction = '') =>
   adminGet<Analytics>('/api/insight/analytics'
     + `${matter ? `?matter=${encodeURIComponent(matter)}` : ''}`

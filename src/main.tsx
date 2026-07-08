@@ -7,7 +7,6 @@ import './styles.css';
 // Backoffice et vue partagée sont chargés à la demande (code splitting) : un visiteur
 // qui vient poser une question ne télécharge pas le code de l'admin ni du partage.
 const AdminApp = lazy(() => import('./Admin'));
-const InsightApp = lazy(() => import('./Insight'));
 const VaultApp = lazy(() => import('./Vault'));
 const SharedView = lazy(() => import('./Shared').then((m) => ({ default: m.SharedView })));
 
@@ -20,8 +19,9 @@ const isInsight = path === '/insight';
 const isVault = path === '/vault';
 const shareMatch = path.match(/^\/r\/([A-Za-z0-9_-]+)$/);
 
+// /insight rend l'APP avec le volet Insight ouvert (vue interne — plus de page à part).
 const route = isAdmin ? <AdminApp />
-  : isInsight ? <InsightApp />
+  : isInsight ? <App initialInsight />
   : isVault ? <VaultApp />
   : shareMatch ? <SharedView id={shareMatch[1]} />
   : <App />;

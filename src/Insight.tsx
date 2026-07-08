@@ -2,81 +2,19 @@ import { useEffect, useState, FormEvent } from 'react';
 import {
   insightStats, insightMatters, insightLawyers, insightLawyer, insightAnalytics,
   insightFirms, insightFirm, insightArticles, insightRgpdRequest, insightExportUrl,
-  adminLogin, logout, getStoredEmail, HttpError,
   InsightLawyer, InsightProfile, InsightCase, InsightMatter, Analytics, AnalyticsRow,
   InsightFirm, InsightFirmProfile, InsightArticle,
 } from './api';
 import { jurisCourt, jurisDate, jurisRef } from './juridictions';
 
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
-type Phase = 'loading' | 'login' | 'denied' | 'ready';
-
-export default function InsightApp() {
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [stats, setStats] = useState<{ lawyers: number; appearances: number } | null>(null);
-
-  const load = async () => {
-    try {
-      setStats(await insightStats());
-      setPhase('ready');
-    } catch (e) {
-      if (e instanceof HttpError && e.status === 401) setPhase('login');
-      else setPhase('denied');
-    }
-  };
-  useEffect(() => { load(); }, []);
-
-  if (phase === 'loading') return <div className="route-loading">Chargement…</div>;
-  if (phase === 'login') return <InsightLogin onDone={load} />;
-  if (phase === 'denied') return <Denied />;
-  return <InsightMain stats={stats} onLogout={async () => { await logout(); setPhase('login'); }} />;
-}
-
-function Denied() {
-  return (
-    <div className="admin-gate">
-      <h1>Insight</h1>
-      <p className="muted">Module réservé aux administrateurs.</p>
-      <a className="send" href="/">Retour à l'application</a>
-    </div>
-  );
-}
-
-function InsightLogin({ onDone }: { onDone: () => void }) {
-  const [email, setEmail] = useState(getStoredEmail() || '');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null); setBusy(true);
-    try { await adminLogin(email.trim(), password); onDone(); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Échec'); }
-    finally { setBusy(false); }
-  };
-  return (
-    <div className="admin-gate">
-      <h1>⚖️ Insight</h1>
-      <p className="muted">Connexion administrateur.</p>
-      <form onSubmit={submit} className="auth-form">
-        <label>Email<input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <label>Mot de passe<input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        {error && <p className="warn">⚠ {error}</p>}
-        <button className="send" disabled={busy}>{busy ? '…' : 'Se connecter'}</button>
-      </form>
-    </div>
-  );
-}
-
-function InsightMain({ stats, onLogout }: {
-  stats: { lawyers: number; appearances: number } | null; onLogout: () => void;
-}) {
+function InsightMain({ stats }: { stats: { lawyers: number; appearances: number } | null }) {
   const [view, setView] = useState<'avocats' | 'cabinets' | 'analytics' | 'methodo'>('avocats');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('cases');
   const [matter, setMatter] = useState('');
   const [matterList, setMatterList] = useState<InsightMatter[]>([]);
   const [list, setList] = useState<InsightLawyer[] | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<InsightProfile | null>(null);
   const [compare, setCompare] = useState<InsightProfile | null>(null);
@@ -86,7 +24,10 @@ function InsightMain({ stats, onLogout }: {
   useEffect(() => {
     const t = setTimeout(() => {
       setLoading(true);
-      insightLawyers(q, 100, sort, matter).then(setList).finally(() => setLoading(false));
+      insightLawyers(q, 100, sort, matter)
+        .then((r) => { setList(r); setLoadErr(false); })
+        .catch(() => { setList([]); setLoadErr(true); })
+        .finally(() => setLoading(false));
     }, q ? 280 : 0);
     return () => clearTimeout(t);
   }, [q, sort, matter]);
@@ -96,9 +37,8 @@ function InsightMain({ stats, onLogout }: {
   const sortLabel = sort === 'recent' ? 'activité récente' : sort === 'winrate' ? 'taux estimé favorable' : 'nombre de décisions';
 
   return (
-    <div className="insight">
-      <header className="admin-header">
-        <strong className="admin-brand">⚖️ Insight</strong>
+    <div className="insight insight-embedded">
+      <header className="insight-tabsbar">
         <div className="admin-tabs">
           <button className={`ghost ${view === 'avocats' ? 'active' : ''}`}
             onClick={() => setView('avocats')}>Avocats</button>
@@ -109,8 +49,6 @@ function InsightMain({ stats, onLogout }: {
           <button className={`ghost ${view === 'methodo' ? 'active' : ''}`}
             onClick={() => setView('methodo')}>Méthodologie & RGPD</button>
         </div>
-        <a className="ghost" href="/">← Application</a>
-        <button className="ghost" onClick={onLogout}>Déconnexion</button>
       </header>
       <main className="admin-main">
         {view === 'methodo' ? <MethodoView /> :
@@ -161,6 +99,7 @@ function InsightMain({ stats, onLogout }: {
                 {matter ? ` en « ${matter} »` : ''} · triés par {sortLabel}
               </p>
             )}
+            {loadErr && <p className="warn">⚠ Impossible de charger les avocats — réessayez (connexion ou service indisponible).</p>}
             {loading && !list ? <p className="muted">Chargement…</p> : (
               <ol className="insight-list">
                 {(list || []).map((l, i) => (
@@ -186,7 +125,7 @@ function InsightMain({ stats, onLogout }: {
         </>
         )}
       </main>
-      <footer className="insight-foot">Insight — maquette interne <span className="version">{APP_VERSION}</span></footer>
+
     </div>
   );
 }
@@ -671,4 +610,17 @@ function yearsSpan(a: number | null, b: number | null): string {
   if (!a && !b) return '—';
   if (a && b && a !== b) return `${a}–${b}`;
   return String(a || b);
+}
+
+// Panneau Insight INTÉGRÉ à l'app (vue interne, même coquille/sidebar — pas de page à part).
+export function InsightEmbedded() {
+  const [stats, setStats] = useState<{ lawyers: number; appearances: number } | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => { insightStats().then(setStats).catch(() => setErr(true)); }, []);
+  return (
+    <>
+      {err && <p className="warn">⚠ Le module Insight ne répond pas — les listes peuvent être vides. Rechargez la page ou réessayez plus tard.</p>}
+      <InsightMain stats={stats} />
+    </>
+  );
 }

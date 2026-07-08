@@ -20,10 +20,12 @@ export function parseThemes(md: string): ThemedAnswer | null {
   let cur: Theme | null = null;
 
   for (const raw of lines) {
-    const h = raw.match(/^#{2,3}\s+(.+)/);
+    // Titre de section : « ## X » / « ### X », ou une ligne composée UNIQUEMENT de « **X** »
+    // (style fréquent des LLM), avec deux-points final optionnel.
+    const h = raw.match(/^#{2,3}\s+(.+)/) || raw.match(/^\*\*([^*]{3,80})\*\*\s*:?\s*$/);
     if (h) {
       if (cur) themes.push(cur);
-      cur = { title: h[1].replace(/\*\*/g, '').trim(), body: '' };
+      cur = { title: h[1].replace(/\*\*/g, '').replace(/\s*:\s*$/, '').trim(), body: '' };
     } else if (cur) cur.body += raw + '\n';
     else intro.push(raw);
   }

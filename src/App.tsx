@@ -5,6 +5,7 @@ import { ask, askStream, health, corpus, pdfHref, login, register, logout, chang
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { Onboarding, shouldOnboard } from './Onboarding';
 import { parseThemes, ThemeMap } from './ThemeMap';
+import { openPdfExport } from './ExportPdf';
 
 // Chargés à la demande (code splitting) : ces écrans ne pèsent pas sur le 1er rendu.
 const LegalPage = lazy(() => import('./Legal').then((m) => ({ default: m.LegalPage })));
@@ -376,6 +377,11 @@ function AssistantMessage({ m, actions, first }: { m: Message; actions: MsgActio
             )}
             <ShareButton m={m} />
             <ExportButton m={m} />
+            <button className="copy-btn" title="Document PDF de la réponse (code couleur des thèmes)"
+              onClick={() => openPdfExport({ question: m.question || '', content: m.content,
+                citations: m.citations || [], themed: parseThemes(m.content) })}>
+              PDF
+            </button>
             {actions.canSave && <button className="copy-btn" title="Ranger dans un dossier"
               onClick={() => actions.onSave(m)}>Enregistrer</button>}
             {actions.canSave && <FollowButton m={m} />}

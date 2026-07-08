@@ -412,6 +412,7 @@ export interface AdminQuestion {
 // Insight — profiling avocats (gate admin)
 export interface InsightLawyer {
   name_key: string; name: string; cases: number; first_year: number | null; last_year: number | null;
+  won?: number; decided?: number;   // renvoyés par list_lawyers (taux estimé par avocat)
 }
 export interface InsightCase {
   display_name: string; doc_id: string; year: number | null; juridiction_key: string | null;

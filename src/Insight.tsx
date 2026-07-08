@@ -7,6 +7,152 @@ import {
 } from './api';
 import { jurisCourt, jurisDate, jurisRef } from './juridictions';
 
+// Étape du parcours de découverte : un avocat ou une matière (avec l'avocat d'où l'on vient).
+type AvStep =
+  | { kind: 'lawyer'; p: InsightProfile }
+  | { kind: 'matter'; name: string; from?: InsightProfile };
+
+// Fil d'Ariane du parcours : Avocats → Maître X → Droit du travail → Maître Y…
+function Crumbs({ stack, onJump }: { stack: AvStep[]; onJump: (len: number) => void }) {
+  return (
+    <nav className="crumbs" aria-label="Parcours">
+      <button className="crumb" onClick={() => onJump(0)}>Avocats</button>
+      {stack.map((st, i) => (
+        <span key={i} className="crumb-seg">
+          <span className="crumb-sep">›</span>
+          {i === stack.length - 1
+            ? <span className="crumb crumb-cur">{st.kind === 'lawyer' ? st.p.name : st.name}</span>
+            : <button className="crumb" onClick={() => onJump(i + 1)}>{st.kind === 'lawyer' ? st.p.name : st.name}</button>}
+        </span>
+      ))}
+    </nav>
+  );
+}
+
+// Tendance d'un avocat dans une matière : activité des 2 dernières années vs les 2 précédentes.
+function matterTrend(cases: InsightCase[], matter: string): -1 | 0 | 1 {
+  const yrs = cases.filter((c) => c.matter === matter && c.year).map((c) => c.year as number);
+  if (yrs.length < 2) return 0;
+  const ref = Math.max(...yrs);
+  const recent = yrs.filter((y) => y >= ref - 1).length;
+  const before = yrs.filter((y) => y < ref - 1 && y >= ref - 3).length;
+  return recent > before ? 1 : recent < before ? -1 : 0;
+}
+
+function TrendArrow({ cases, matter }: { cases: InsightCase[]; matter: string }) {
+  const t = matterTrend(cases, matter);
+  if (t === 0) return null;
+  return <span className={`trend-arrow ${t > 0 ? 'up' : 'down'}`}
+    title={t > 0 ? 'Activité en hausse (2 dernières années vs 2 précédentes)' : 'Activité en baisse'}>
+    {t > 0 ? '▲' : '▼'}</span>;
+}
+
+// ---------- Vue MATIÈRE du parcours : tendances du domaine + avocats liés ----------
+// C'est le pont entre les jeux de données : depuis un avocat on ouvre une de SES matières,
+// on y lit les tendances du domaine (volume, taux, montants, années) et on rebondit sur
+// les AUTRES avocats actifs dans cette matière.
+function MatterJourney({ name, from, onOpenLawyer }: {
+  name: string; from?: InsightProfile; onOpenLawyer: (key: string) => void;
+}) {
+  const [an, setAn] = useState<Analytics | null>(null);
+  const [lawyers, setLawyers] = useState<InsightLawyer[] | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    setAn(null); setLawyers(null); setErr(false);
+    Promise.all([insightAnalytics(name), insightLawyers('', 30, 'cases', name)])
+      .then(([a, l]) => { setAn(a); setLawyers(l); })
+      .catch(() => setErr(true));
+  }, [name]);
+
+  if (err) return <p className="warn">⚠ Impossible de charger la matière.</p>;
+  if (!an || !lawyers) return <p className="muted">Chargement de la matière…</p>;
+
+  const o = an.overall;
+  // Position de l'avocat d'origine DANS cette matière (calculée sur ses décisions).
+  let fromLine: JSX.Element | null = null;
+  if (from) {
+    const cs = from.cases.filter((c) => c.matter === name);
+    const won = cs.filter((c) => c.won === 1).length;
+    const dec = cs.filter((c) => c.won === 0 || c.won === 1).length;
+    const rate = dec ? won / dec : null;
+    const diff = rate != null && o.win_rate != null ? Math.round((rate - o.win_rate) * 100) : null;
+    fromLine = (
+      <div className="insight-note from-note">
+        <b>{from.name}</b> dans cette matière : <b>{cs.length}</b> décision{cs.length > 1 ? 's' : ''}
+        {rate != null && <> · <b>{Math.round(rate * 100)} %</b> d'issues estimées favorables</>}
+        {diff != null && diff !== 0 && (
+          <span className={`trend-arrow ${diff > 0 ? 'up' : 'down'}`}>
+            {' '}({diff > 0 ? '+' : ''}{diff} pts vs moyenne de la matière)
+          </span>
+        )}
+        <TrendArrow cases={from.cases} matter={name} />
+      </div>
+    );
+  }
+
+  // Volume par année de la matière (barres, même langage visuel que le profil).
+  const years = an.by_year.filter((r) => typeof r.cle === 'number')
+    .map((r) => ({ y: r.cle as number, n: r.cases })).sort((a, b) => a.y - b.y);
+  const yMax = Math.max(1, ...years.map((r) => r.n));
+
+  return (
+    <div className="insight-profile matter-journey">
+      <h2>{name} <span className="muted small">— tendances de la matière</span></h2>
+      <div className="stat-grid">
+        <div className="stat-tile"><div className="stat-label">affaires</div><div className="stat-value">{o.cases.toLocaleString('fr-FR')}</div></div>
+        <div className="stat-tile"><div className="stat-label">taux de succès<sup>*</sup></div><div className="stat-value">{pctFmt(o.win_rate)}</div></div>
+        {o.amount_median != null && (
+          <div className="stat-tile"><div className="stat-label">montant médian<sup>*</sup></div><div className="stat-value">{euroFmt(o.amount_median)}</div></div>
+        )}
+        {o.delai_median != null && (
+          <div className="stat-tile"><div className="stat-label">délai médian<sup>*</sup></div><div className="stat-value">{delaiFmt(o.delai_median)}</div></div>
+        )}
+        <div className="stat-tile"><div className="stat-label">avocats actifs</div><div className="stat-value">{o.lawyers.toLocaleString('fr-FR')}</div></div>
+      </div>
+
+      {fromLine}
+
+      {years.length > 1 && (
+        <>
+          <h3>Volume par année</h3>
+          <div className="year-chart">
+            {years.map((r) => (
+              <div key={r.y} className="year-bar" title={`${r.y} : ${r.n} décision(s)`}>
+                <div className="year-bar-fill" style={{ height: `${Math.round((r.n / yMax) * 100)}%` }} />
+                <span className="year-lbl">{years.length <= 18 || r.y % 5 === 0 ? `’${String(r.y).slice(2)}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <h3>Avocats liés à cette matière</h3>
+      <p className="muted small">Classés par volume dans « {name} » — cliquez pour continuer le parcours sur un profil.</p>
+      <ol className="insight-list">
+        {(() => { const mx = Math.max(1, ...lawyers.map((x) => x.cases)); return lawyers.map((l, i) => {
+          const isFrom = from && l.name_key === from.name_key;
+          const rate = l.decided ? (l.won || 0) / l.decided : null;
+          return (
+            <li key={l.name_key}>
+              <button className={`lw-row ${isFrom ? 'lw-row-from' : ''}`}
+                onClick={() => !isFrom && onOpenLawyer(l.name_key)} disabled={!!isFrom}>
+                <span className="rank">#{i + 1}</span>
+                <span className="lw-name">{l.name}{isFrom ? ' — vous y êtes' : ''}</span>
+                <span className="lw-bar" aria-hidden="true">
+                  <span className="lw-bar-fill" style={{ width: `${Math.max(4, Math.round((l.cases / mx) * 100))}%` }} />
+                </span>
+                <span className="lw-count">{l.cases}</span>
+                <span className="lw-period muted">{rate != null ? pctFmt(rate) : '—'}</span>
+              </button>
+            </li>
+          );
+        }); })()}
+      </ol>
+      <p className="muted wl-legend"><sup>*</sup> Indicateurs estimés (heuristiques), indicatifs.</p>
+    </div>
+  );
+}
+
 function InsightMain({ stats }: { stats: { lawyers: number; appearances: number } | null }) {
   const [view, setView] = useState<'avocats' | 'cabinets' | 'analytics' | 'methodo'>('avocats');
   const [q, setQ] = useState('');
@@ -16,7 +162,13 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
   const [list, setList] = useState<InsightLawyer[] | null>(null);
   const [loadErr, setLoadErr] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [sel, setSel] = useState<InsightProfile | null>(null);
+  // PARCOURS DE DÉCOUVERTE : pile de navigation avocat ↔ matière (fil d'Ariane cliquable).
+  // Chaque étape garde son contexte : depuis un profil on explore une matière (tendances +
+  // avocats liés), depuis la matière on rebondit sur un confrère, etc.
+  const [stack, setStack] = useState<AvStep[]>([]);
+  const top = stack.length ? stack[stack.length - 1] : null;
+  const sel = top?.kind === 'lawyer' ? top.p : null;
+  const push = (st: AvStep) => setStack((prev) => [...prev, st]);
   const [compare, setCompare] = useState<InsightProfile | null>(null);
   const [comparing, setComparing] = useState(false);
 
@@ -32,7 +184,7 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
     return () => clearTimeout(t);
   }, [q, sort, matter]);
 
-  const open = (k: string) => insightLawyer(k).then((p) => { setSel(p); setCompare(null); });
+  const open = (k: string) => insightLawyer(k).then((p) => { push({ kind: 'lawyer', p }); setCompare(null); });
   const maxCases = list && list.length ? Math.max(...list.map((l) => l.cases)) : 1;
   const sortLabel = sort === 'recent' ? 'activité récente' : sort === 'winrate' ? 'taux estimé favorable' : 'nombre de décisions';
 
@@ -61,15 +213,21 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
           magistrats ni de greffiers.
         </div>
 
+        {stack.length > 0 && (
+          <Crumbs stack={stack} onJump={(i) => { setStack(stack.slice(0, i)); setCompare(null); setComparing(false); }} />
+        )}
         {compare && sel ? (
           <CompareView a={sel} b={compare} onClose={() => setCompare(null)} />
         ) : comparing && sel ? (
           <ComparePicker exclude={sel.name_key}
             onPick={(k) => { insightLawyer(k).then(setCompare); setComparing(false); }}
             onCancel={() => setComparing(false)} />
+        ) : top?.kind === 'matter' ? (
+          <MatterJourney name={top.name} from={top.from} onOpenLawyer={open} />
         ) : sel ? (
-          <Profile p={sel} onBack={() => { setSel(null); setCompare(null); }}
-            onOpen={open} onCompare={() => setComparing(true)} />
+          <Profile p={sel} onBack={() => { setStack(stack.slice(0, -1)); setCompare(null); }}
+            onOpen={open} onCompare={() => setComparing(true)}
+            onMatter={(name) => push({ kind: 'matter', name, from: sel })} />
         ) : (
           <>
             {stats && (
@@ -401,8 +559,9 @@ function MethodoView() {
   );
 }
 
-function Profile({ p, onBack, onOpen, onCompare }: {
+function Profile({ p, onBack, onOpen, onCompare, onMatter }: {
   p: InsightProfile; onBack: () => void; onOpen: (key: string) => void; onCompare: () => void;
+  onMatter: (name: string) => void;
 }) {
   // Répartitions dérivées des doc_id (plus fiables que la clé juridiction, souvent nulle).
   const jc: Record<string, number> = {};
@@ -430,11 +589,20 @@ function Profile({ p, onBack, onOpen, onCompare }: {
       <h2>{p.name}</h2>
       {p.firm && <p className="muted insight-firm">Cabinet : <b>{p.firm}</b></p>}
       {p.matters.length > 0 && (
-        <div className="insight-chips prof-matters">
-          {p.matters.slice(0, 6).map((m) => (
-            <span key={m.name} className="chip matter-chip">{m.name} <span className="cochip-n">{m.count}</span></span>
-          ))}
-        </div>
+        <>
+          <div className="insight-chips prof-matters">
+            {p.matters.slice(0, 6).map((m) => (
+              <button key={m.name} className="chip matter-chip matter-link"
+                title={`Explorer « ${m.name} » : tendances de la matière et avocats liés`}
+                onClick={() => onMatter(m.name)}>
+                {m.name} <span className="cochip-n">{m.count}</span>
+                <TrendArrow cases={p.cases} matter={m.name} />
+                <span className="chip-go">→</span>
+              </button>
+            ))}
+          </div>
+          <p className="muted small matters-hint">Cliquez une matière pour voir ses tendances et les avocats qui y sont actifs.</p>
+        </>
       )}
       <div className="stat-grid">
         <div className="stat-tile"><div className="stat-label">décisions</div><div className="stat-value">{p.cases_count}</div></div>

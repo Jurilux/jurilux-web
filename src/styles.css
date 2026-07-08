@@ -933,3 +933,20 @@ a.nav-item { display: block; text-decoration: none; }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .tmap-node { animation: tmap-pop .35s cubic-bezier(.2, .9, .3, 1.4); }
 @media (max-width: 700px) { .tmap-node { animation: none; } }
+
+/* Parcours de découverte Insight : fil d'Ariane, chips-matières cliquables, tendances */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 12px; font-size: 13px; }
+.crumb { border: 0; background: none; color: var(--primary); cursor: pointer; font: inherit; font-size: 13px; padding: 2px 4px; border-radius: 5px; }
+.crumb:hover { background: var(--primary-soft); text-decoration: underline; }
+.crumb-cur { color: var(--text); font-weight: 650; cursor: default; }
+.crumb-sep { color: var(--muted-2); margin: 0 2px; }
+.matter-link { cursor: pointer; border: 1px solid var(--border); transition: .12s; }
+.matter-link:hover { border-color: var(--primary); background: var(--primary-soft); }
+.matter-link .chip-go { opacity: 0; margin-left: 3px; transition: .12s; color: var(--primary); }
+.matter-link:hover .chip-go { opacity: 1; }
+.matters-hint { margin: 4px 0 0; }
+.trend-arrow { font-size: 10px; margin-left: 4px; }
+.trend-arrow.up { color: var(--ok); }
+.trend-arrow.down { color: var(--ko); }
+.from-note { margin: 10px 0; }
+.lw-row-from { background: var(--primary-soft); cursor: default; }

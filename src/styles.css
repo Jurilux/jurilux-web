@@ -922,3 +922,14 @@ a.nav-item { display: block; text-decoration: none; }
   .tmap-node { position: static; transform: none; max-width: none; }
   .tmap-node:hover { transform: none; }
 }
+
+/* Insight en vue interne : barre d'onglets simple (l'app fournit la coquille) */
+.insight-embedded { padding: 0; }
+.insight-tabsbar { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0 14px; border-bottom: 1px solid var(--border-2); margin-bottom: 16px; }
+.insight-embedded .admin-main { padding: 0; max-width: none; }
+
+/* Apparition progressive des bulles pendant le streaming */
+@keyframes tmap-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+.tmap-node { animation: tmap-pop .35s cubic-bezier(.2, .9, .3, 1.4); }
+@media (max-width: 700px) { .tmap-node { animation: none; } }

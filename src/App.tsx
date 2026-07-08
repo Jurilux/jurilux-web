@@ -14,6 +14,7 @@ const SaveToDossierModal = lazy(() => import('./Cabinet').then((m) => ({ default
 const Alerts = lazy(() => import('./Alerts').then((m) => ({ default: m.Alerts })));
 const Draft = lazy(() => import('./Draft').then((m) => ({ default: m.Draft })));
 const Account = lazy(() => import('./Account').then((m) => ({ default: m.Account })));
+const InsightPanel = lazy(() => import('./Insight').then((m) => ({ default: m.InsightEmbedded })));
 
 interface Message {
   id: string;
@@ -321,8 +322,19 @@ function AssistantMessage({ m, actions, first }: { m: Message; actions: MsgActio
   // Carte thématique : la PREMIÈRE réponse aboutie est présentée en constellation de thèmes
   // (si le markdown se découpe en ≥ 2 sections) plutôt qu'en long texte. Bascule Carte/Texte.
   const themed = useMemo(
-    () => (first && !m.streaming && !m.error && !m.refused && m.content) ? parseThemes(m.content) : null,
+    () => (first && !m.streaming && !m.error && !m.refused && m.content) ? parseThemes(m.content, 1) : null,
     [first, m.streaming, m.error, m.refused, m.content]);
+  // Pendant le streaming de la 1re réponse : constellation PROGRESSIVE (les bulles se posent
+  // au fil des sections, focus sur celle en cours) — dès 1 thème détecté dans le flux.
+  const liveCache = useRef<{ nl: number; res: ReturnType<typeof parseThemes> }>({ nl: -1, res: null });
+  const themedLive = useMemo(() => {
+    if (!(first && m.streaming && m.content)) { liveCache.current = { nl: -1, res: null }; return null; }
+    // Reparse seulement quand une LIGNE s'est terminée (un titre ne peut naître qu'à la ligne) :
+    // évite un parse complet à chaque token du flux.
+    let nl = 0; for (let i = 0; i < m.content.length; i++) if (m.content.charCodeAt(i) === 10) nl++;
+    if (nl !== liveCache.current.nl) liveCache.current = { nl, res: parseThemes(m.content, 1, false) };
+    return liveCache.current.res;
+  }, [first, m.streaming, m.content]);
   const [view, setView] = useState<'carte' | 'texte'>('carte');
   if (m.error) {
     return (
@@ -337,10 +349,16 @@ function AssistantMessage({ m, actions, first }: { m: Message; actions: MsgActio
     return (
       <div className="bubble assistant">
         <div className="bubble-tag">Jurilux</div>
-        {m.content
-          ? <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, []) }} />
-          : <p className="typing">Recherche dans les sources…</p>}
-        <span className="stream-cursor" aria-hidden="true">▌</span>
+        {themedLive ? (
+          <ThemeMap answer={themedLive} citations={[]} streaming />
+        ) : m.content ? (
+          <>
+            <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, []) }} />
+            <span className="stream-cursor" aria-hidden="true">▌</span>
+          </>
+        ) : (
+          <p className="typing">Recherche dans les sources…</p>
+        )}
       </div>
     );
   }
@@ -546,7 +564,24 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function App() {
+export default function App({ initialInsight = false }: { initialInsight?: boolean } = {}) {
+  // Insight = VUE INTERNE de l'app (même coquille, même barre latérale) — plus une page à part.
+  const [insightOpen, setInsightOpen] = useState(initialInsight);
+  const [insightSeen, setInsightSeen] = useState(initialInsight);  // garde le panneau monté (état/requêtes conservés)
+  // L'URL reste la source de vérité partageable : /insight à l'ouverture, / à la fermeture.
+  const openInsight = () => {
+    setInsightOpen(true); setInsightSeen(true); setMenuOpen(false);
+    if (window.location.pathname !== '/insight') window.history.pushState({}, '', '/insight');
+  };
+  const closeInsight = () => {
+    setInsightOpen(false);
+    if (window.location.pathname === '/insight') window.history.pushState({}, '', '/');
+  };
+  useEffect(() => {
+    const onPop = () => setInsightOpen(window.location.pathname === '/insight');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -587,7 +622,7 @@ export default function App() {
   useEffect(refreshAlerts, []);
 
   const onAuth = (email: string) => { setUser(email); me().then(setAccount); };
-  const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); };
+  const goHome = () => { setMessages([]); setInput(''); setMenuOpen(false); closeInsight(); };
   const openHistory = async () => { setMenuOpen(false); setHistOpen(true); setHistory(await getHistory()); };
   // Déconnexion : on recharge sur l'accueil pour que le mur d'authentification reprenne la main
   // (le site étant privé, aucun écran ne doit rester visible une fois déconnecté).
@@ -599,7 +634,11 @@ export default function App() {
 
   useEffect(() => { health().then(setConnected); }, []);
   useEffect(() => { corpus().then(setCorpusInfo); }, []);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+  // Scroll UNIQUEMENT à l'envoi d'un message (mettre la question + le début de la réponse en vue).
+  // Pendant le streaming, l'écran NE SUIT PAS le flux : la constellation reste au focus et le
+  // texte grandit plus bas — l'utilisateur descend s'il le souhaite.
+  const msgCount = messages.length;
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgCount]);
 
   const activeFilters =
     (typeof filters.year_min === 'number' ? 1 : 0) +
@@ -702,7 +741,8 @@ export default function App() {
         <button className="side-cta" onClick={goHome}><span className="plus">+</span> Nouvelle recherche</button>
 
         <div className="side-label">Rechercher</div>
-        <button className="nav-item active" onClick={goHome}><span className="ico">⌕</span> Recherche</button>
+        <button className={`nav-item ${insightOpen ? '' : 'active'}`}
+          onClick={() => { if (insightOpen) closeInsight(); else goHome(); }}><span className="ico">⌕</span> Recherche</button>
         {user && <button className="nav-item" onClick={openHistory}><span className="ico">◷</span> Historique</button>}
         {user && <button className="nav-item" onClick={openCabinet}><span className="ico">▤</span> Mon cabinet</button>}
         {user && <button className="nav-item" onClick={openAlerts}>
@@ -718,7 +758,9 @@ export default function App() {
         </>}
 
         <div className="side-label">Explorer</div>
-        <a className="nav-item" href="/insight"><span className="ico">⚖</span> Insight — avocats</a>
+        <button className={`nav-item ${insightOpen ? 'active' : ''}`}
+          onClick={openInsight}>
+          <span className="ico">⚖</span> Insight — avocats</button>
         {account?.is_admin && <a className="nav-item" href="/admin"><span className="ico">▦</span> Administration</a>}
 
         <div className="side-foot">
@@ -756,7 +798,14 @@ export default function App() {
 
       <main className="workspace">
 
-        {messages.length === 0 ? (
+        {insightSeen && (
+          <div className="content" style={insightOpen ? undefined : { display: 'none' }}><div className="inner">
+            <Suspense fallback={<div className="route-loading">Chargement…</div>}>
+              <InsightPanel />
+            </Suspense>
+          </div></div>
+        )}
+        {insightOpen ? null : messages.length === 0 ? (
           <div className="content">
             <div className="inner welcome">
               <section className="hero">
@@ -844,7 +893,7 @@ export default function App() {
               {user && <a className="nav-item" href="/vault">🔒 Vault <span className="muted">— vos documents privés</span></a>}
               {user && <button className="nav-item" onClick={openDraft}>✍️ Rédiger <span className="muted">— brouillon sourcé</span></button>}
               {user && <button className="nav-item" onClick={openAlerts}>🔔 Mes alertes {alertUnseen > 0 && <span className="alert-badge">{alertUnseen}</span>} <span className="muted">— veille</span></button>}
-              <a className="nav-item nav-admin" href="/insight">⚖️ Insight <span className="muted">— avocats</span></a>
+              <button className="nav-item nav-admin" onClick={openInsight}>⚖️ Insight <span className="muted">— avocats</span></button>
               {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
               {user && <button className="nav-item" onClick={openAccount}>⚙️ Mon compte <span className="muted">— clés, prompts, données</span></button>}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
@@ -916,7 +965,9 @@ export default function App() {
                 {history.map((h) => (
                   <li key={h.id}>
                     <button className="hist-item" onClick={() => {
-                      setInput(h.question); setHistOpen(false); inputRef.current?.focus();
+                      closeInsight();   // le composer n'est monté que hors Insight
+                      setInput(h.question); setHistOpen(false);
+                      setTimeout(() => inputRef.current?.focus(), 60);
                     }}>
                       <span className="hist-q">{h.question}</span>
                       <span className="hist-meta">{new Date(h.created_at).toLocaleDateString('fr-FR')}

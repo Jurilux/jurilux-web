@@ -51,8 +51,9 @@ export function parseThemes(md: string): ThemedAnswer | null {
   return { intro: intro.join('\n').trim(), themes: themes.slice(0, 8) };
 }
 
-// Palette des bulles (accessible clair/sombre, déclinée par thème).
-const HUES = [212, 158, 268, 24, 340, 190, 96, 48];
+// Palette des bulles (accessible clair/sombre, déclinée par thème). Exportée : l'export PDF
+// réutilise le MÊME code couleur pour que le document imprimé corresponde à la carte.
+export const HUES = [212, 158, 268, 24, 340, 190, 96, 48];
 
 function firstSentence(s: string, max = 170): string {
   const flat = s.replace(/[#*_]/g, '').replace(/\s+/g, ' ').trim();

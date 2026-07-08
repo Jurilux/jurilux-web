@@ -876,3 +876,49 @@ a.nav-item { display: block; text-decoration: none; }
 .mk-stat b { font-size: 20px; color: var(--text); }
 .mk-warn { font-size: 12px; color: var(--muted); font-style: italic; }
 @media (max-width: 720px) { .doc-toc, .doc-two { grid-template-columns: 1fr; } }
+
+/* ===== Carte thématique (1re réponse) — constellation de thèmes autour de « L'essentiel » ===== */
+.viewtoggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-right: 4px; }
+.viewtoggle button { border: 0; background: var(--card); color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
+.viewtoggle button.on { background: var(--primary); color: var(--on-dark); }
+
+.tmap { display: flex; flex-direction: column; gap: 14px; margin: 6px 0 4px; }
+.tmap-stage { position: relative; height: 380px; border: 1px solid var(--border-2); border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 50% 50%, var(--card) 0%, var(--card-2) 78%),
+    var(--card-2); overflow: hidden; }
+.tmap-links { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tmap-link { stroke: var(--border); stroke-width: .35; }
+.tmap-link.on { stroke: var(--primary); stroke-width: .6; }
+.tmap-core { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(260px, 38%); background: var(--primary); color: var(--on-dark);
+  border-radius: 16px; padding: 14px 16px; text-align: center;
+  box-shadow: 0 10px 30px rgba(23, 54, 92, .28); }
+.tmap-core-tag { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+  text-transform: uppercase; opacity: .75; margin-bottom: 5px; }
+.tmap-core p { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.tmap-node { position: absolute; transform: translate(-50%, -50%); max-width: 190px;
+  background: hsl(var(--hue) 42% 97%); border: 1.5px solid hsl(var(--hue) 38% 62%);
+  color: hsl(var(--hue) 45% 24%); border-radius: 999px; padding: 9px 15px;
+  font: inherit; font-size: 13px; font-weight: 600; line-height: 1.25; cursor: pointer;
+  box-shadow: 0 3px 10px rgba(28, 27, 24, .08); transition: transform .15s, box-shadow .15s; }
+.tmap-node:hover { transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 6px 18px rgba(28, 27, 24, .14); z-index: 2; }
+.tmap-node.on { background: hsl(var(--hue) 45% 30%); border-color: hsl(var(--hue) 45% 30%); color: #fff;
+  box-shadow: 0 8px 22px hsla(var(--hue), 45%, 30%, .35); z-index: 2; }
+.tmap-node-title { display: block; }
+.tmap-node-refs { display: inline-block; margin-top: 3px; font-family: var(--mono); font-weight: 400;
+  font-size: 9.5px; letter-spacing: .06em; opacity: .75; }
+.tmap-detail { border: 1px solid var(--border-2); border-left: 3px solid hsl(var(--hue) 42% 45%);
+  border-radius: 12px; padding: 14px 18px; background: var(--card); }
+.tmap-detail-title { margin: 0 0 6px; font-size: 15px; color: hsl(var(--hue) 45% 26%); }
+.tmap-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.tmap-nav .ghost { font-size: 12px; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 700px) {
+  /* Mobile : la constellation devient une rangée de pastilles + le noyau en tête. */
+  .tmap-stage { height: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .tmap-links { display: none; }
+  .tmap-core { position: static; transform: none; width: 100%; }
+  .tmap-node { position: static; transform: none; max-width: none; }
+  .tmap-node:hover { transform: none; }
+}

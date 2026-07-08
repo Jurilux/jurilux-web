@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, Suspense, lazy, FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense, lazy, FormEvent } from 'react';
 import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
   getStoredEmail, listAlerts, createAlert, oidcEnabled, oidcLogin, captureOidcToken,
   AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
 import { Onboarding, shouldOnboard } from './Onboarding';
+import { parseThemes, ThemeMap } from './ThemeMap';
 
 // Chargés à la demande (code splitting) : ces écrans ne pèsent pas sur le 1er rendu.
 const LegalPage = lazy(() => import('./Legal').then((m) => ({ default: m.LegalPage })));
@@ -315,7 +316,13 @@ function RecoveryActions({ m, actions }: { m: Message; actions: MsgActions }) {
   );
 }
 
-function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
+function AssistantMessage({ m, actions, first }: { m: Message; actions: MsgActions; first?: boolean }) {
+  // Carte thématique : la PREMIÈRE réponse aboutie est présentée en constellation de thèmes
+  // (si le markdown se découpe en ≥ 2 sections) plutôt qu'en long texte. Bascule Carte/Texte.
+  const themed = useMemo(
+    () => (first && !m.streaming && !m.error && !m.refused && m.content) ? parseThemes(m.content) : null,
+    [first, m.streaming, m.error, m.refused, m.content]);
+  const [view, setView] = useState<'carte' | 'texte'>('carte');
   if (m.error) {
     return (
       <div className="bubble assistant">
@@ -361,6 +368,12 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
         </div>
         {m.content && (
           <div className="msg-actions">
+            {themed && (
+              <div className="viewtoggle" role="tablist" aria-label="Présentation de la réponse">
+                <button className={view === 'carte' ? 'on' : ''} onClick={() => setView('carte')}>🧭 Carte</button>
+                <button className={view === 'texte' ? 'on' : ''} onClick={() => setView('texte')}>☰ Texte</button>
+              </div>
+            )}
             <ShareButton m={m} />
             <ExportButton m={m} />
             {actions.canSave && <button className="copy-btn" title="Ranger dans un dossier"
@@ -370,7 +383,9 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
           </div>
         )}
       </div>
-      <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, m.citations || []) }} />
+      {themed && view === 'carte'
+        ? <ThemeMap answer={themed} citations={m.citations || []} />
+        : <div className="answer" dangerouslySetInnerHTML={{ __html: renderAnswer(m.content, m.citations || []) }} />}
 
       {m.status === 'partial' && m.feedback && (m.feedback.why || m.feedback.limits) && (
         <div className="feedback">
@@ -772,7 +787,9 @@ export default function App() {
                     m.role === 'user' ? (
                       <div key={m.id} className="bubble user"><p>{m.content}</p></div>
                     ) : (
-                      <AssistantMessage key={m.id} m={m} actions={{
+                      <AssistantMessage key={m.id} m={m}
+                        first={m.id === messages.find((x) => x.role === 'assistant')?.id}
+                        actions={{
                         onSuggestion: (s) => { setInput(s); inputRef.current?.focus(); },
                         onAsk: (qq) => submit(qq),
                         onBroaden: (mm) => { setFilters({}); submit(mm.question || '', {}); },

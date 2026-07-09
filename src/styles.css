@@ -977,3 +977,6 @@ a.nav-item { display: block; text-decoration: none; }
 .ftests-chip.ko { color: #fff; background: var(--red, #c0392b); border-color: transparent; }
 .ftests-score-ok { color: var(--green, #12855a); font-weight: 600; }
 .ftests-score-ko { color: var(--red, #c0392b); font-weight: 600; }
+
+/* Pied de barre latérale : liens d'action (déconnexion + mentions) */
+.side-links { display: flex; gap: 12px; flex-wrap: wrap; }

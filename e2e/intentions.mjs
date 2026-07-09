@@ -169,4 +169,5 @@ export const INTENTIONS = {
   'W16-13-question-nominative-court-circuit': { intention: "Poser une question nominative sur un avocat", attendu: "Le profil court-circuite le RAG (profil + décisions)" },
   'W16-14-profil-en-echec-message': { intention: "Cliquer un avocat quand l'API profil est en panne", attendu: "Un message d'erreur visible (jamais d'échec silencieux)" },
   'W16-15-cabinet-en-echec-message': { intention: "Ouvrir une fiche cabinet quand l'API est en panne", attendu: "Un message d'erreur visible (jamais d'échec silencieux)" },
+  'W17-01-deconnexion-desktop': { intention: "Se déconnecter depuis un écran d'ordinateur", attendu: "Bouton visible dans la barre latérale sans ouvrir de menu ; retour au mur de connexion" },
 };

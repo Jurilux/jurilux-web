@@ -1408,6 +1408,18 @@ await journey(browser, 'W16-15-cabinet-en-echec-message', async (page) => {
   await page.unroute('**/api/insight/firms/**');
 });
 
+
+await journey(browser, 'W17-01-deconnexion-desktop', async (page) => {
+  // Régression signalée : « sur ordi je ne vois pas de bouton se déconnecter » — le bouton
+  // n'existait QUE dans le tiroir mobile ☰ (tous nos parcours navigant par lui, rien ne le voyait).
+  await entrer(page);
+  await page.setViewportSize({ width: 1280, height: 900 });   // vue DESKTOP explicite
+  const btn = page.locator('aside').getByRole('button', { name: 'Se déconnecter' });
+  await btn.waitFor({ state: 'visible', timeout: 8000 });     // visible SANS ouvrir de menu
+  await btn.click();
+  await voir(page, 'accès réservé');                          // retour au mur (site privé)
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

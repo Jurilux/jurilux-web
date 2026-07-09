@@ -3,6 +3,7 @@ import {
   listWorkspaces, createWorkspace, listMembers, addMember, setMemberRole, removeMember,
   deleteWorkspace, leaveWorkspace, listDossiers, createDossier, deleteDossier,
   listDossierItems, addDossierItem, restrictDossier, grantDossierAccess, revokeDossierAccess,
+  createPortal, getPortal, revokePortal,
   Workspace, Member, Dossier, DossierItem, Citation,
 } from './api';
 
@@ -95,7 +96,8 @@ export function Cabinet({ onClose }: { onClose: () => void }) {
         {error && <p className="warn">⚠ {error}</p>}
 
         {dossier && sel ? (
-          <DossierView dossier={dossier} onBack={() => setDossier(null)} />
+          <DossierView dossier={dossier} onBack={() => setDossier(null)}
+            canAdmin={sel.role === 'owner' || sel.role === 'admin'} />
         ) : sel ? (
           <WorkspaceView ws={sel} onBack={() => { setSel(null); loadSpaces(); }}
             onOpenDossier={setDossier} />
@@ -324,12 +326,53 @@ function DossierRestrictControls({ dossier, members, onChanged }:
   );
 }
 
-function DossierView({ dossier, onBack }: { dossier: Dossier; onBack: () => void }) {
+function DossierView({ dossier, onBack, canAdmin }: { dossier: Dossier; onBack: () => void; canAdmin?: boolean }) {
   const [items, setItems] = useState<DossierItem[] | null>(null);
   useEffect(() => { listDossierItems(dossier.id).then(setItems).catch(() => setItems([])); }, [dossier.id]);
+  // Portail client : lien de lecture pour le client final (owner/admin, hors dossier restreint).
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  const [portalErr, setPortalErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (canAdmin) getPortal(dossier.id).then((p) => setPortalUrl(p.url)).catch(() => {});
+  }, [dossier.id, canAdmin]);
+  const partager = async () => {
+    setPortalErr(null);
+    try { setPortalUrl((await createPortal(dossier.id)).url); }
+    catch (e) { setPortalErr(e instanceof Error ? e.message : 'Création du portail impossible.'); }
+  };
+  const revoquer = async () => {
+    try { await revokePortal(dossier.id); setPortalUrl(null); } catch { /* déjà révoqué */ }
+  };
+  const copier = async () => {
+    if (!portalUrl) return;
+    try { await navigator.clipboard.writeText(window.location.origin + portalUrl);
+      setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* silencieux */ }
+  };
   return (
     <>
       <button className="linklike back" onClick={onBack}>← Dossiers</button>
+
+      {canAdmin && (
+        <div className="portal-manage">
+          <div className="nav-label">Portail client</div>
+          {portalUrl ? (
+            <div className="portal-manage-row">
+              <code className="portal-link" title={portalUrl}>{portalUrl}</code>
+              <button className="ghost" onClick={copier}>{copied ? '✓ Copié' : 'Copier le lien'}</button>
+              <button className="ghost" onClick={partager} title="Un nouveau lien révoque l'ancien">Régénérer</button>
+              <button className="ghost draft-danger" onClick={revoquer}>Révoquer</button>
+            </div>
+          ) : (
+            <div className="portal-manage-row">
+              <p className="muted small" style={{ margin: 0 }}>
+                Partagez ce dossier en LECTURE à votre client (sans compte) — lien révocable.</p>
+              <button className="ghost" onClick={partager}>Créer le lien client</button>
+            </div>
+          )}
+          {portalErr && <p className="warn small">⚠ {portalErr}</p>}
+        </div>
+      )}
       {!items ? <p className="muted">Chargement…</p> : items.length === 0 ? (
         <p className="muted small">Ce dossier est vide. Depuis une réponse, utilisez « Enregistrer » pour l'y ranger.</p>
       ) : (

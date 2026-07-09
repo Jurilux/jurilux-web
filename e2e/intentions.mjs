@@ -210,4 +210,7 @@ export const INTENTIONS = {
   'W26-02-recette-question': { intention: "Lancer un travail type en un clic", attendu: "La recette « question » de l'accueil lance la recherche et aboutit" },
   'W26-03-recette-redaction-preremplie': { intention: "Démarrer un courrier type en un clic", attendu: "La recette « rédaction » ouvre l'atelier pré-rempli (modèle + instruction)" },
   'W26-04-recherche-approfondie': { intention: "Creuser une question complexe", attendu: "« Approfondie » produit un mémo multi-axes structuré et sourcé" },
+  // ── W27. Veille v2 : redline (I7) + portail client (I6) ──
+  'W27-01-redline-contrat': { intention: "Corriger une clause non conforme", attendu: "La règle « à revoir » propose un redline : passage actuel barré → clause de remplacement copiable" },
+  'W27-02-portail-client': { intention: "Partager un dossier à mon client", attendu: "Le client consulte le dossier sans compte via le lien ; la révocation coupe l'accès" },
 };

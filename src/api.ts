@@ -321,6 +321,10 @@ export const listDossiers = (wid: number) => wsGet<{ items: Dossier[] }>(`/api/w
 export const createDossier = (wid: number, name: string) =>
   wsSend<Dossier>(`/api/workspaces/${wid}/dossiers`, 'POST', { name });
 export const listDossierItems = (did: number) => wsGet<{ items: DossierItem[] }>(`/api/dossiers/${did}/items`).then((d) => d.items);
+// Portail client : un dossier partagé en lecture au client final (jeton = autorisation).
+export const createPortal = (did: number) => wsSend<{ token: string; url: string }>(`/api/dossiers/${did}/portal`, 'POST');
+export const getPortal = (did: number) => wsGet<{ token: string | null; url: string | null }>(`/api/dossiers/${did}/portal`);
+export const revokePortal = (did: number) => wsSend<{ ok: boolean }>(`/api/dossiers/${did}/portal`, 'DELETE');
 export const addDossierItem = (did: number, question: string, answer: string | null,
                                citations: Citation[], status?: string) =>
   wsSend<{ id: number }>(`/api/dossiers/${did}/items`, 'POST', { question, answer, citations, status });
@@ -734,7 +738,11 @@ export const createPlaybook = (name: string, rules: PlaybookRule[], workspace_id
   wsSend<Playbook>('/api/playbooks', 'POST', { name, rules, workspace_id });
 export const deletePlaybook = (id: number) => wsSend<{ ok: boolean }>(`/api/playbooks/${id}`, 'DELETE');
 
-export interface ContractFinding { label: string; status: 'ok' | 'issue' | 'missing'; note: string; }
+export interface ContractFinding {
+  label: string; status: 'ok' | 'issue' | 'missing'; note: string;
+  extrait?: string | null;     // redline : passage actuel problématique (issue)
+  suggestion?: string | null;  // redline : clause de remplacement/ajout proposée
+}
 export interface ContractReview {
   task: string; playbook: string; findings: ContractFinding[];
   summary: { total: number; ok: number; issue: number; missing: number };

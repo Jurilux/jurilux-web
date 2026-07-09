@@ -1846,6 +1846,56 @@ await journey(browser, 'W26-04-recherche-approfondie', async (page) => {
   await voir(page, 'Sources', { timeout: 4000 });                        // citations union des axes
 });
 
+// ═══════════ W27. VEILLE v2 — redline de contrats (I7) + portail client (I6) ═══════════
+await journey(browser, 'W27-01-redline-contrat', async (page) => {
+  // I7 : une règle « à revoir » propose un REDLINE — passage actuel barré → clause proposée.
+  await vaultPro(page);
+  const nom = `PB Redline ${Date.now()}`;
+  await page.getByPlaceholder('Nom du playbook (ex : NDA standard)').fill(nom);
+  await page.getByPlaceholder('Intitulé (ex : clause de confidentialité)').first().fill('Confidentialité');
+  await page.getByPlaceholder('Ce qui doit être vérifié').first().fill('Vérifier la confidentialité.');
+  await page.getByRole('button', { name: /Ajouter une règle/ }).click();  // 2e règle → « issue » (stub)
+  await page.getByPlaceholder('Intitulé (ex : clause de confidentialité)').nth(1).fill('Loi applicable');
+  await page.getByPlaceholder('Ce qui doit être vérifié').nth(1).fill('Le droit luxembourgeois doit s’appliquer.');
+  await page.getByRole('button', { name: /Créer le playbook/ }).first().click();
+  await page.locator('.cab-row').filter({ hasText: nom }).first().waitFor({ state: 'visible', timeout: 12000 });
+  const selects = page.locator('select');
+  await selects.nth(0).selectOption({ index: 1 }).catch(() => {});
+  await page.locator('select').nth(1).selectOption({ label: nom }).catch(async () => {
+    await page.locator('select').nth(1).selectOption({ index: 1 }).catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Analyser' }).last().click();
+  await voir(page, 'à revoir', { timeout: 12000 });
+  await voir(page, 'soumis au droit français');                          // passage actuel (barré)
+  await voir(page, 'régi par le droit luxembourgeois');                  // clause proposée
+  await voir(page, 'Copier la clause proposée');
+});
+
+await journey(browser, 'W27-02-portail-client', async (page) => {
+  // I6 : l'owner crée le lien client d'un dossier ; un CLIENT SANS COMPTE le consulte ;
+  // la révocation coupe l'accès.
+  const a = await acteur(browser, 'dupont.owner@demo.lu');
+  try {
+    await menuItem(a.p, 'Mon cabinet');
+    await a.p.locator('.drawer').getByText('Étude Dupont', { exact: false }).first().click();
+    await a.p.waitForTimeout(600);
+    await a.p.getByText('Dossier Martin', { exact: false }).first().click();
+    await a.p.getByRole('button', { name: 'Créer le lien client' }).click();
+    const lien = await a.p.locator('.portal-link').innerText();
+    if (!lien.startsWith('/p/')) throw new Error('lien de portail inattendu : ' + lien);
+    // le CLIENT (contexte neuf, aucune connexion) consulte le dossier
+    await page.goto(FRONT + lien, { waitUntil: 'networkidle' });
+    await voir(page, 'Dossier Martin');
+    await voir(page, 'Dossier partagé en lecture');
+    await absent(page, 'accès réservé');                                 // pas de mur de login
+    // révocation → le lien meurt
+    await a.p.getByRole('button', { name: 'Révoquer' }).click();
+    await a.p.waitForTimeout(500);
+    await page.reload({ waitUntil: 'networkidle' });
+    await voir(page, 'introuvable ou a été révoqué');
+  } finally { await a.ctx.close(); }
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

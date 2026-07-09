@@ -491,7 +491,20 @@ function PlaybookManager({ docs }: { docs: VaultDoc[] }) {
                   <tr key={i}>
                     <td>{f.label}</td>
                     <td><span style={findingStyle(f.status)}>{findingLabel[f.status]}</span></td>
-                    <td className="muted">{f.note || '—'}</td>
+                    <td className="muted">
+                      {f.note || '—'}
+                      {/* Redline : passage actuel barré → clause proposée, copiable. */}
+                      {f.suggestion && (
+                        <div className="redline">
+                          {f.extrait && <p className="redline-avant">{f.extrait}</p>}
+                          <p className="redline-apres">{f.suggestion}</p>
+                          <button className="linklike small"
+                            onClick={() => navigator.clipboard.writeText(f.suggestion!).catch(() => {})}>
+                            Copier la clause proposée
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {review.findings.length === 0 && <tr><td colSpan={3} className="muted">Aucun point de contrôle.</td></tr>}

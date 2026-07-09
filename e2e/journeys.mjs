@@ -1382,6 +1382,32 @@ await journey(browser, 'W16-13-question-nominative-court-circuit', async (page) 
   await voir(page, 'décision');
 });
 
+
+await journey(browser, 'W16-14-profil-en-echec-message', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  // simule une panne de l'API profil (500) : le clic doit produire un MESSAGE, jamais un
+  // échec silencieux (« je clique et rien ne se passe »).
+  await page.route('**/api/insight/lawyers/**', (r) =>
+    r.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"panne simulée"}' }));
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await page.getByText('Pierre SCHMIT').first().click();
+  await voir(page, "Impossible d'ouvrir ce profil");
+  await page.unroute('**/api/insight/lawyers/**');
+});
+
+await journey(browser, 'W16-15-cabinet-en-echec-message', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Cabinets' }).click();
+  await voir(page, 'ÉTUDE SCHMIT & FABER');
+  await page.route('**/api/insight/firms/**', (r) =>
+    r.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"panne simulée"}' }));
+  await page.locator('tr', { hasText: 'ÉTUDE SCHMIT & FABER' }).getByText('ouvrir').click();
+  await voir(page, "Impossible d'ouvrir cette fiche");
+  await page.unroute('**/api/insight/firms/**');
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

@@ -184,7 +184,15 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
     return () => clearTimeout(t);
   }, [q, sort, matter]);
 
-  const open = (k: string) => insightLawyer(k).then((p) => { push({ kind: 'lawyer', p }); setCompare(null); });
+  // Ouvre un profil. JAMAIS d'échec silencieux : si l'API répond 4xx/5xx ou que le réseau
+  // casse, l'utilisateur voit un message (sinon « je clique et rien ne se passe »).
+  const [openErr, setOpenErr] = useState<string | null>(null);
+  const open = (k: string) => {
+    setOpenErr(null);
+    insightLawyer(k)
+      .then((p) => { push({ kind: 'lawyer', p }); setCompare(null); })
+      .catch((e) => setOpenErr(e instanceof Error ? e.message : "Profil momentanément indisponible"));
+  };
   const maxCases = list && list.length ? Math.max(...list.map((l) => l.cases)) : 1;
   const sortLabel = sort === 'recent' ? 'activité récente' : sort === 'winrate' ? 'taux estimé favorable' : 'nombre de décisions';
 
@@ -213,6 +221,10 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
           magistrats ni de greffiers.
         </div>
 
+        {openErr && (
+          <p className="warn">⚠ Impossible d'ouvrir ce profil : {openErr} — réessayez ; si cela persiste,
+            l'index insight est peut-être en cours de reconstruction.</p>
+        )}
         {stack.length > 0 && (
           <Crumbs stack={stack} onJump={(i) => { setStack(stack.slice(0, i)); setCompare(null); setComparing(false); }} />
         )}
@@ -421,6 +433,7 @@ function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
   const [q, setQ] = useState('');
   const [list, setList] = useState<InsightFirm[] | null>(null);
   const [sel, setSel] = useState<InsightFirmProfile | null>(null);
+  const [firmErr, setFirmErr] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => { insightFirms(q, 80).then(setList).catch(() => setList([])); }, q ? 250 : 0);
@@ -474,6 +487,7 @@ function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
         <input className="insight-search" placeholder="Rechercher un cabinet…" value={q}
           onChange={(e) => setQ(e.target.value)} autoFocus />
       </div>
+      {firmErr && <p className="warn">⚠ Impossible d'ouvrir cette fiche : {firmErr} — réessayez.</p>}
       {!list ? <p className="muted">Chargement…</p> : list.length === 0 ? (
         <p className="muted insight-empty">Aucun cabinet{q ? ` pour « ${q} »` : ' détecté (le build insight n’a peut-être pas encore tourné)'}.</p>
       ) : (
@@ -487,7 +501,8 @@ function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
                   <td>{f.cases}</td>
                   <td>{f.lawyers}</td>
                   <td>{pctFmt(f.win_rate)}</td>
-                  <td><button className="linklike" onClick={() => insightFirm(f.firm).then(setSel)}>ouvrir →</button></td>
+                  <td><button className="linklike" onClick={() => insightFirm(f.firm).then(setSel)
+                    .catch((e) => setFirmErr(e instanceof Error ? e.message : 'Fiche indisponible'))}>ouvrir →</button></td>
                 </tr>
               ))}
             </tbody>

@@ -167,4 +167,6 @@ export const INTENTIONS = {
   'W16-11-analytics-complet': { intention: "Lire le tableau de bord contentieux complet", attendu: "KPIs (dont montant/délai médians), 3 répartitions, articles visés" },
   'W16-12-methodo-rgpd': { intention: "Comprendre la méthodologie et exercer un droit RGPD", attendu: "Bloc jurimétrie visible et demande d'opposition enregistrée" },
   'W16-13-question-nominative-court-circuit': { intention: "Poser une question nominative sur un avocat", attendu: "Le profil court-circuite le RAG (profil + décisions)" },
+  'W16-14-profil-en-echec-message': { intention: "Cliquer un avocat quand l'API profil est en panne", attendu: "Un message d'erreur visible (jamais d'échec silencieux)" },
+  'W16-15-cabinet-en-echec-message': { intention: "Ouvrir une fiche cabinet quand l'API est en panne", attendu: "Un message d'erreur visible (jamais d'échec silencieux)" },
 };

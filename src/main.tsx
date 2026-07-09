@@ -11,17 +11,19 @@ const VaultApp = lazy(() => import('./Vault'));
 const SharedView = lazy(() => import('./Shared').then((m) => ({ default: m.SharedView })));
 
 // Routage minimal sans dépendance : /admin → backoffice, /insight → profiling avocats,
-// /vault → documents privés du cabinet, /r/<id> → réponse partagée, sinon l'app publique.
+// /vault → documents privés, /redaction → atelier de rédaction, /r/<id> → réponse partagée.
 // Caddy sert index.html en fallback.
 const path = window.location.pathname.replace(/\/+$/, '');
 const isAdmin = path === '/admin';
 const isInsight = path === '/insight';
 const isVault = path === '/vault';
+const isRedaction = path === '/redaction';
 const shareMatch = path.match(/^\/r\/([A-Za-z0-9_-]+)$/);
 
 // /insight rend l'APP avec le volet Insight ouvert (vue interne — plus de page à part).
 const route = isAdmin ? <AdminApp />
   : isInsight ? <App initialInsight />
+  : isRedaction ? <App initialRedaction />
   : isVault ? <VaultApp />
   : shareMatch ? <SharedView id={shareMatch[1]} />
   : <App />;

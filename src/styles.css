@@ -982,7 +982,6 @@ a.nav-item { display: block; text-decoration: none; }
 .side-links { display: flex; gap: 12px; flex-wrap: wrap; }
 
 /* ---------- Rédaction v2 : atelier (modèles, brouillons, versions) ---------- */
-.modal.draft-v2 { max-width: 1060px; width: 94vw; }
 .draft-open { max-width: 260px; margin-left: auto; margin-right: 8px; }
 .draft-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; margin-top: 8px; }
 @media (max-width: 780px) { .draft-grid { grid-template-columns: 1fr; } }
@@ -1021,3 +1020,22 @@ a.nav-item { display: block; text-decoration: none; }
 /* Déconnexion (pied de barre desktop) — même allure que le lien légal, classe distincte */
 .side-logout-link { color: inherit; }
 .side-logout-link:hover { color: var(--red, #c0392b); }
+
+/* ---------- Rédaction : VUE INTERNE pleine page (comme Insight) ---------- */
+.draft-embedded { display: flex; flex-direction: column; gap: 14px; }
+.draft-head { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border);
+  padding-bottom: 12px; }
+.draft-head h1 { font-size: 1.4rem; margin: 0; }
+.draft-head .draft-open { margin-left: auto; max-width: 300px; }
+.draft-body { min-height: 0; }
+/* exemples (état vide) */
+.draft-exemples h3 { margin: 4px 0 2px; }
+.draft-ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
+.draft-ex { display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; background: var(--surface, #fff);
+  color: inherit; transition: border-color .12s, transform .12s; }
+.draft-ex:hover { border-color: var(--primary, #17365c); transform: translateY(-1px); }
+.draft-ex-kind { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--primary, #17365c); font-weight: 700; }
+.draft-ex-title { font-weight: 650; }
+.draft-ex-desc { font-size: .82rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.draft-doc { max-height: none; }

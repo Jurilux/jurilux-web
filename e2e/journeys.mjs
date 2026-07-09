@@ -298,11 +298,11 @@ await journey(browser, 'G05-rediger', async (page) => {
   await accueil(page);
   await login(page, 'pro@demo.lu');
   await menuItem(page, 'Rédiger');
-  // La rédaction est une fenêtre modale (pas un tiroir) : viser .modal, pas le champ d'accueil.
-  const zone = page.locator('.modal textarea').first();
+  // La rédaction est une vue interne pleine page (plus un modal) : viser .draft-setup.
+  const zone = page.locator('.draft-setup textarea').first();
   await zone.waitFor({ state: 'visible', timeout: 8000 });
   await zone.fill('Rédige une mise en demeure pour loyers impayés.');
-  await page.locator('.modal').getByRole('button', { name: /Rédiger|Générer/ }).first().click();
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
   await voir(page, 'Document rédigé', { timeout: 12000 });
 });
 
@@ -1457,8 +1457,9 @@ await journey(browser, 'W18-03-brouillon-persistant-reouverture', async (page) =
   await page.locator('.draft-title').fill('Note NC — dossier X');
   await page.locator('.draft-title').blur();
   await page.waitForTimeout(400);
-  await page.locator('.modal .close').click();
-  await menuItem(page, 'Rédiger');
+  // RECHARGEMENT complet de la page /redaction : le brouillon doit persister côté serveur
+  await page.goto(`${FRONT}/redaction`, { waitUntil: 'networkidle' });
+  await dismissOnboarding(page);
   await page.locator('.draft-open').selectOption({ index: 1 }); // brouillon le plus récent
   await voir(page, 'Document rédigé (test).');
   const titre = await page.locator('.draft-title').inputValue();  // le titre vit dans un <input>
@@ -1536,7 +1537,41 @@ await journey(browser, 'W18-08-suppression-brouillon', async (page) => {
   await voir(page, 'Document rédigé (test).');
   await page.getByRole('button', { name: 'Supprimer', exact: true }).click(); // confirm() auto-accepté
   await page.waitForTimeout(500);
-  await voir(page, 'Le document apparaîtra ici');                // retour à l'état vide
+  await voir(page, 'Exemples — cliquez pour pré-remplir');      // retour à l'état vide (exemples)
+});
+
+
+await journey(browser, 'W18-09-exemples-et-route', async (page) => {
+  // accès direct à la vue interne par l'URL (comme /insight), pas de modale
+  await entrer(page);
+  await page.goto(`${FRONT}/redaction`, { waitUntil: 'networkidle' });
+  await dismissOnboarding(page);
+  await voir(page, 'Rédaction assistée');                        // en-tête de la vue pleine page
+  await voir(page, 'Exemples — cliquez pour pré-remplir');
+  // cliquer un exemple pré-remplit modèle + variables + instruction
+  await page.locator('.draft-ex').filter({ hasText: 'Loyers commerciaux impayés' }).click();
+  const instr = await page.locator('.draft-setup textarea').inputValue();
+  if (!instr.includes('loyers commerciaux')) throw new Error('exemple non chargé : ' + instr);
+  const dest = await page.getByPlaceholder('SARL Exemple, 12 rue X, Luxembourg').inputValue();
+  if (!dest.includes('Bail Center')) throw new Error('variable non préremplie');
+  // il ne reste qu'à lancer
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test). [squelette suivi]');
+});
+
+// ═══════════════ W19. CARTE THÉMATIQUE SUR LES RÉPONSES DE SUIVI ═══════════════
+// Régression : les réponses aux questions connexes/de suivi doivent recevoir la MÊME
+// carte thématique (constellation) que la 1re réponse, et non un simple texte brut.
+await journey(browser, 'W19-01-carte-sur-reponse-suivi', async (page) => {
+  await entrer(page);
+  await ask(page, 'Licenciement avec effet immédiat ?');
+  // 1re réponse → carte thématique
+  await page.locator('.tmap').first().waitFor({ timeout: 15000 });
+  // approfondir via une question de suivi
+  await page.locator('.followup-btn').first().waitFor({ timeout: 8000 });
+  await page.locator('.followup-btn').first().click();
+  // la réponse de SUIVI est elle aussi présentée en carte (≥ 2 constellations au total)
+  await page.locator('.tmap').nth(1).waitFor({ timeout: 15000 });
 });
 
 await browser.close();

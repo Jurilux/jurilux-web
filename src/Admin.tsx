@@ -3,6 +3,7 @@ import {
   adminOverview, adminUsers, adminQuestions, adminFeedback, adminActivity, adminProbe, adminEval,
   adminSetPlan, adminSetAdmin, adminDeleteUser,
   adminHealth, adminGetConfig, adminPatchConfig, adminAudit, adminPurge,
+  adminTests, adminTestsRun, adminTestsImport, AdminTests, FSection, FRes,
   adminLogin, logout, getStoredEmail, HttpError,
   AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit, EvalReport,
   AdminHealth, AuditEntry,
@@ -12,7 +13,7 @@ const Documentation = lazy(() => import('./Documentation'));
 
 type Phase = 'loading' | 'login' | 'denied' | 'ready';
 type Tab = 'dashboard' | 'inspector' | 'eval' | 'users' | 'questions' | 'feedback' | 'corpus'
-  | 'health' | 'config' | 'audit' | 'docs';
+  | 'health' | 'config' | 'audit' | 'tests' | 'docs';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 
@@ -691,6 +692,179 @@ function ConfigTab() {
 }
 
 // ---------- journal d'audit ----------
+// ---------- Tests fonctionnels : visualisation des rapports du moteur ----------
+// Le moteur (functional/) joue ~450 assertions (parcours utilisateur + matrice
+// endpoint × profil) contre l'app stubée, en sous-processus à base jetable.
+// Cet onglet montre le DERNIER rapport, permet de relancer la suite (si embarquée
+// dans l'image) et d'importer un rapport JSON produit ailleurs (poste local, CI).
+function FSectionView({ titre, section, echecsSeuls }:
+  { titre: string; section: FSection; echecsSeuls: boolean }) {
+  const parFonc = new Map<string, FRes[]>();
+  for (const r of section.resultats) {
+    if (!parFonc.has(r.fonctionnalite)) parFonc.set(r.fonctionnalite, []);
+    parFonc.get(r.fonctionnalite)!.push(r);
+  }
+  const foncs = [...parFonc.entries()]
+    .filter(([, rs]) => !echecsSeuls || rs.some((r) => !r.ok));
+  return (
+    <section className="ftests-sec">
+      <h3>{titre} <span className="muted">— {section.verts}/{section.total} assertions vertes</span></h3>
+      {foncs.length === 0 && <p className="muted">Aucun échec dans cette section. ✓</p>}
+      {foncs.map(([fonc, rs]) => {
+        const ok = rs.every((r) => r.ok);
+        const parCas = new Map<string, FRes[]>();
+        for (const r of rs) {
+          if (!parCas.has(r.cas)) parCas.set(r.cas, []);
+          parCas.get(r.cas)!.push(r);
+        }
+        return (
+          <details key={fonc} className={`ftests-fonc ${ok ? 'ok' : 'ko'}`} open={!ok}>
+            <summary>
+              <span className={`ftests-etat ${ok ? 'ok' : 'ko'}`}>{ok ? '✅' : '❌'}</span>
+              {' '}{fonc}
+              <span className="muted"> ({rs.filter((r) => r.ok).length}/{rs.length})</span>
+            </summary>
+            <ul className="ftests-cas">
+              {[...parCas.entries()]
+                .filter(([, cs]) => !echecsSeuls || cs.some((c) => !c.ok))
+                .map(([cas, cs]) => (
+                <li key={cas}>
+                  <code className="ftests-casid">{cas}</code>
+                  <span className="ftests-profils">
+                    {cs.map((c, i) => (
+                      <span key={i} className={`ftests-chip ${c.ok ? 'ok' : 'ko'}`}
+                        title={c.ok ? `${c.profil} : ${c.attendu}` :
+                          `${c.profil} — attendu ${c.attendu}, obtenu ${c.obtenu}. ${c.detail}`}>
+                        {c.profil} {c.ok ? '✓' : `✗ ${c.obtenu}≠${c.attendu}`}
+                      </span>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+    </section>
+  );
+}
+
+function TestsTab() {
+  const [data, setData] = useState<AdminTests | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [echecsSeuls, setEchecsSeuls] = useState(false);
+  const enCours = data?.execution.statut === 'en_cours';
+
+  const charger = () => adminTests().then((d) => { setData(d); setErr(null); })
+    .catch((e) => setErr(e instanceof Error ? e.message : 'Erreur'));
+  useEffect(() => { charger(); }, []);
+  // pendant un run : re-lire l'état toutes les 5 s jusqu'à la fin
+  useEffect(() => {
+    if (!enCours) return;
+    const t = setInterval(charger, 5000);
+    return () => clearInterval(t);
+  }, [enCours]);
+
+  const lancer = async () => {
+    setNote(null);
+    try { await adminTestsRun(); setNote('Suite lancée — ~2 min (base jetable, serveur non affecté).'); charger(); }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Erreur'); }
+  };
+
+  const importer = async (f: File) => {
+    setNote(null); setErr(null);
+    try {
+      const rapport = JSON.parse(await f.text());
+      const res = await adminTestsImport(rapport);
+      setNote(`Rapport importé : ${res.verts}/${res.total} assertions vertes.`);
+      charger();
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Rapport illisible'); }
+  };
+
+  if (err && !data) return <p className="warn">⚠ {err}</p>;
+  if (!data) return <p className="muted">Chargement…</p>;
+  const d = data.dernier;
+  const tout_vert = d ? d.verts === d.total : false;
+
+  return (
+    <div className="ftests">
+      <div className="ftests-bar">
+        <button className="primary" onClick={lancer} disabled={!data.executable || enCours}
+          title={data.executable ? 'Joue la suite en sous-processus isolé (base jetable)'
+            : 'Suite non embarquée dans cette image — importer un rapport JSON'}>
+          {enCours ? '⏳ Suite en cours…' : '▶ Lancer les tests'}
+        </button>
+        <label className="ghost ftests-import">
+          ⬆ Importer un rapport JSON
+          <input type="file" accept=".json,application/json" style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importer(f); e.target.value = ''; }} />
+        </label>
+        <label className="ftests-toggle">
+          <input type="checkbox" checked={echecsSeuls} onChange={(e) => setEchecsSeuls(e.target.checked)} />
+          {' '}échecs seulement
+        </label>
+      </div>
+      {note && <p className="muted">{note}</p>}
+      {err && <p className="warn">⚠ {err}</p>}
+      {data.execution.statut === 'erreur' && (
+        <p className="warn">⚠ Dernier lancement en erreur : {data.execution.erreur}</p>
+      )}
+
+      {!d && (
+        <div className="ftests-vide">
+          <p>Aucun rapport archivé pour l'instant.</p>
+          <p className="muted">Cliquez « Lancer les tests », ou produisez un rapport en local puis importez-le :</p>
+          <pre className="ftests-cmd">python -m functional.run --format json &gt; rapport.json</pre>
+        </div>
+      )}
+
+      {d && (
+        <>
+          <div className="ftests-kpis">
+            <div className={`ftests-kpi ${tout_vert ? 'ok' : 'ko'}`}>
+              <b>{d.verts}/{d.total}</b><span>assertions vertes</span>
+            </div>
+            <div className="ftests-kpi"><b>{d.total - d.verts}</b><span>échec{d.total - d.verts > 1 ? 's' : ''}</span></div>
+            <div className="ftests-kpi"><b>{d.duree_s != null ? `${Math.round(d.duree_s)} s` : '—'}</b><span>durée</span></div>
+            <div className="ftests-kpi">
+              <b>{new Date(d.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</b>
+              <span>{d.source === 'backoffice' ? 'lancé ici' : 'importé'}</span>
+            </div>
+          </div>
+
+          {d.rapport.parcours && (
+            <FSectionView titre="Parcours utilisateur" section={d.rapport.parcours} echecsSeuls={echecsSeuls} />
+          )}
+          {d.rapport.matrice && (
+            <FSectionView titre="Matrice d'autorisation (endpoint × profil)" section={d.rapport.matrice} echecsSeuls={echecsSeuls} />
+          )}
+
+          {data.historique.length > 1 && (
+            <section className="ftests-sec">
+              <h3>Historique</h3>
+              <table className="admin-table">
+                <thead><tr><th>Date</th><th>Source</th><th>Score</th><th>Durée</th></tr></thead>
+                <tbody>
+                  {data.historique.map((h) => (
+                    <tr key={h.id}>
+                      <td>{new Date(h.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                      <td>{h.source}</td>
+                      <td className={h.verts === h.total ? 'ftests-score-ok' : 'ftests-score-ko'}>
+                        {h.verts}/{h.total}</td>
+                      <td>{h.duree_s != null ? `${Math.round(h.duree_s)} s` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function AuditTab() {
   const [rows, setRows] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -795,6 +969,7 @@ export default function AdminApp() {
     { key: 'health', label: 'Santé' },
     { key: 'config', label: 'Paramétrage' },
     { key: 'audit', label: 'Audit' },
+    { key: 'tests', label: 'Tests' },
     { key: 'docs', label: '📘 Documentation' },
   ];
 
@@ -827,6 +1002,7 @@ export default function AdminApp() {
         {tab === 'health' && <HealthTab />}
         {tab === 'config' && <ConfigTab />}
         {tab === 'audit' && <AuditTab />}
+        {tab === 'tests' && <TestsTab />}
         {tab === 'docs' && <Suspense fallback={<p className="muted">Chargement…</p>}><Documentation /></Suspense>}
       </main>
     </div>

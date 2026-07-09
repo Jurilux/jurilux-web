@@ -950,3 +950,30 @@ a.nav-item { display: block; text-decoration: none; }
 .trend-arrow.down { color: var(--ko); }
 .from-note { margin: 10px 0; }
 .lw-row-from { background: var(--primary-soft); cursor: default; }
+
+/* ---------- Backoffice : onglet Tests (visualisation du moteur fonctionnel) ---------- */
+.ftests { display: flex; flex-direction: column; gap: 14px; }
+.ftests-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ftests-import { cursor: pointer; }
+.ftests-toggle { margin-left: auto; font-size: .88rem; color: var(--muted); cursor: pointer; }
+.ftests-vide { border: 1px dashed var(--border); border-radius: 10px; padding: 18px; }
+.ftests-cmd { background: var(--surface-2, rgba(127,127,127,.08)); padding: 8px 12px; border-radius: 8px; overflow-x: auto; }
+.ftests-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.ftests-kpi { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
+.ftests-kpi b { font-size: 1.25rem; }
+.ftests-kpi span { color: var(--muted); font-size: .8rem; }
+.ftests-kpi.ok b { color: var(--green, #12855a); }
+.ftests-kpi.ko b { color: var(--red, #c0392b); }
+.ftests-sec h3 { margin: 10px 0 6px; }
+.ftests-fonc { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+.ftests-fonc.ko { border-color: color-mix(in srgb, var(--red, #c0392b) 50%, var(--border)); }
+.ftests-fonc summary { cursor: pointer; user-select: none; }
+.ftests-cas { list-style: none; margin: 8px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ftests-cas li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.ftests-casid { font-size: .82rem; opacity: .85; min-width: 220px; }
+.ftests-profils { display: flex; flex-wrap: wrap; gap: 4px; }
+.ftests-chip { font-size: .75rem; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--border); }
+.ftests-chip.ok { color: var(--green, #12855a); }
+.ftests-chip.ko { color: #fff; background: var(--red, #c0392b); border-color: transparent; }
+.ftests-score-ok { color: var(--green, #12855a); font-weight: 600; }
+.ftests-score-ko { color: var(--red, #c0392b); font-weight: 600; }

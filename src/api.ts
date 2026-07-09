@@ -436,6 +436,46 @@ export const insightLawyers = (q = '', limit = 50, sort = 'cases', matter = '') 
 export const insightLawyer = (key: string) =>
   adminGet<InsightProfile>(`/api/insight/lawyers/${encodeURIComponent(key)}`);
 
+// ---------- Backoffice : visualisation des tests fonctionnels ----------
+export interface FRes {
+  fonctionnalite: string; cas: string; profil: string;
+  attendu: string; obtenu: string; ok: boolean; detail: string;
+}
+export interface FSection {
+  total: number; verts: number; code_sortie: number;
+  fonctionnalites: Record<string, { reussie: boolean; ok: number; total: number }>;
+  resultats: FRes[];
+}
+export interface FRun {
+  id: number; created_at: string; source: string; total: number; verts: number;
+  duree_s: number | null; rapport: { parcours?: FSection; matrice?: FSection };
+}
+export interface FRunSummary { id: number; created_at: string; source: string; total: number; verts: number; duree_s: number | null; }
+export interface AdminTests {
+  dernier: FRun | null; historique: FRunSummary[];
+  execution: { statut: string; demarre_a: string | null; erreur: string | null };
+  executable: boolean;
+}
+export const adminTests = () => adminGet<AdminTests>('/api/admin/tests');
+export async function adminTestsRun(): Promise<void> {
+  const res = await fetch('/api/admin/tests/run', { method: 'POST', headers: { ...authHeaders() } });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+}
+export async function adminTestsImport(rapport: unknown): Promise<{ total: number; verts: number }> {
+  const res = await fetch('/api/admin/tests/rapport', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(rapport),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
+  }
+  return (await res.json()) as { total: number; verts: number };
+}
+
 export const adminOverview = () => adminGet<AdminOverview>('/api/admin/overview');
 export const adminUsers = () => adminGet<{ items: AdminUser[] }>('/api/admin/users').then((d) => d.items);
 export const adminQuestions = (limit = 100) =>

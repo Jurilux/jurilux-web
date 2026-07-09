@@ -546,6 +546,20 @@ export const vaultCounter = (id: number) =>
   vaultAnalyze<{ task: string; answer: string | null; refused: boolean; citations: Citation[] }>(id, 'counter');
 export const vaultTimeline = (id: number) => vaultAnalyze<{ task: string; events: TimelineEvent[] }>(id, 'timeline');
 
+// Chaîne de travail (B11 v1) : séquence d'analyses en un appel ; une étape en panne est
+// rapportée en `error` d'étape (la chaîne continue côté serveur).
+export interface ChainStep {
+  task: string; error?: string;
+  references?: CitationCheck[]; verified?: number; total?: number;      // citations
+  answer?: string | null; refused?: boolean; citations?: Citation[];    // counter
+  summary?: string;                                                     // summary
+  events?: TimelineEvent[];                                             // timeline
+  matter?: string | null; outcome?: string | null;                      // extract (partiel)
+}
+export const vaultChain = (id: number, steps: string[]) =>
+  wsSend<{ doc_id: number; filename: string; steps: ChainStep[] }>(
+    `/api/vault/documents/${id}/chain`, 'POST', { steps });
+
 // Revue tabulaire : 1 document = 1 ligne, colonnes extraites.
 export interface VaultReviewRow extends VaultStructure { doc_id: number; filename: string; }
 export const vaultReview = (docIds: number[]) =>

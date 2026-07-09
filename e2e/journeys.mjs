@@ -1793,6 +1793,19 @@ await journey(browser, 'W24-02-export-word', async (page) => {
   if (!nom.endsWith('.doc')) throw new Error('téléchargement attendu .doc, reçu : ' + nom);
 });
 
+// ═══════════ W25. CHAÎNE DE TRAVAIL VAULT (B11 v1) ═══════════
+await journey(browser, 'W25-01-chaine-complete', async (page) => {
+  // « ⚡ Chaîne complète » : citations → contre-argumentaire → résumé, en un geste,
+  // résultats empilés dans l'ordre d'exécution.
+  await vaultPro(page); await ouvrirAnalyse(page);
+  await page.getByRole('button', { name: /Chaîne complète/ }).first().click();
+  await voir(page, 'Citations vérifiées', { timeout: 12000 });   // étape 1
+  await voir(page, 'Contre-argumentaire', { timeout: 4000 });    // étape 2
+  await voir(page, 'Résumé de test.', { timeout: 4000 });        // étape 3 (stub du banc)
+  const n = await page.locator('.chain-step').count();
+  if (n !== 3) throw new Error(`3 étapes attendues, ${n} rendues`);
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

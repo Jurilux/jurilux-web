@@ -203,4 +203,6 @@ export const INTENTIONS = {
   // ── W24. Thème sombre + export Word ──
   'W24-01-theme-sombre-persistant': { intention: "Travailler en thème sombre", attendu: "La bascule du menu de compte passe l'app en sombre, persiste au rechargement, et revient au clair" },
   'W24-02-export-word': { intention: "Ouvrir mon document dans Word", attendu: "« Word » télécharge un .doc au nom du brouillon (papier à en-tête inclus)" },
+  // ── W25. Chaîne de travail Vault (B11 v1) ──
+  'W25-01-chaine-complete': { intention: "Analyser un document en un geste", attendu: "La chaîne exécute citations → contre-argumentaire → résumé et empile les 3 résultats" },
 };

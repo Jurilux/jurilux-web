@@ -2,6 +2,7 @@ import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
 import {
   listVaultDocs, vaultUpload, deleteVaultDoc, vaultAsk,
   vaultCitations, vaultExtract, vaultSummary, vaultCounter, vaultTimeline,
+  vaultChain, ChainStep,
   vaultReview, listPlaybooks, createPlaybook, deletePlaybook, reviewContract,
   pdfHref, getToken, HttpError,
   VaultDoc, AskResponse, CitationCheck, VaultStructure, TimelineEvent,
@@ -101,12 +102,12 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
 
   // Changement de document : on repart d'un panneau vierge.
   useEffect(() => {
-    setTask(null); setError(null); setBusy(false);
+    setTask(null); setError(null); setBusy(false); setChain(null);
     setCitations(null); setExtract(null); setSummary(null); setCounter(null); setTimeline(null);
   }, [doc.id]);
 
   const run = async (t: AnalysisTask) => {
-    setTask(t); setError(null); setBusy(true);
+    setTask(t); setError(null); setBusy(true); setChain(null);
     try {
       if (t === 'citations') setCitations(await vaultCitations(doc.id));
       else if (t === 'extract') setExtract(await vaultExtract(doc.id));
@@ -118,6 +119,15 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Chaîne de travail (B11 v1) : citations → contre-argumentaire → résumé en UN geste.
+  const [chain, setChain] = useState<ChainStep[] | null>(null);
+  const runChain = async () => {
+    setTask(null); setError(null); setBusy(true); setChain(null);
+    try { setChain((await vaultChain(doc.id, ['citations', 'counter', 'summary'])).steps); }
+    catch (e) { setError(errMsg(e)); }
+    finally { setBusy(false); }
   };
 
   const buttons: { key: AnalysisTask; label: string }[] = [
@@ -140,6 +150,9 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
           <button key={b.key} className={`chip${task === b.key ? ' chip-lateral' : ''}`}
             disabled={busy} onClick={() => run(b.key)}>{b.label}</button>
         ))}
+        <button className={`chip${chain ? ' chip-lateral' : ''}`} disabled={busy} onClick={runChain}
+          title="Vérifier les citations, produire le contre-argumentaire puis le résumé — en un geste">
+          ⚡ Chaîne complète</button>
       </div>
 
       {busy && <p className="muted">Analyse en cours…</p>}
@@ -212,6 +225,38 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
             ))}
           </div>
         )
+      )}
+
+      {/* Chaîne de travail : les étapes s'empilent dans l'ordre d'exécution. */}
+      {!busy && chain && (
+        <div className="chain-results">
+          {chain.map((s, i) => (
+            <section className="chain-step" key={i}>
+              <h4 className="chain-step-title">
+                <span className="chain-step-num">{i + 1}</span>
+                {s.task === 'citations' ? 'Citations vérifiées'
+                  : s.task === 'counter' ? 'Contre-argumentaire'
+                  : s.task === 'summary' ? 'Résumé'
+                  : s.task === 'timeline' ? 'Chronologie' : 'Extraction'}
+              </h4>
+              {s.error ? <p className="warn">⚠ Étape indisponible : {s.error}</p>
+                : s.task === 'citations' ? (
+                  <p className="muted small">{s.verified} / {s.total} référence(s) vérifiée(s) dans le corpus
+                    {(s.references || []).some((r) => !r.verified) &&
+                      <> — <b>{(s.references || []).filter((r) => !r.verified).length} non retrouvée(s)</b> (à contrôler)</>}.
+                  </p>
+                ) : s.task === 'counter' ? (
+                  s.refused || !s.answer
+                    ? <p className="muted">Aucun contre-argumentaire produit (éléments insuffisants).</p>
+                    : <p style={{ whiteSpace: 'pre-wrap' }}>{s.answer}</p>
+                ) : s.task === 'summary' ? (
+                  <p style={{ whiteSpace: 'pre-wrap' }}>{s.summary}</p>
+                ) : (
+                  <p className="muted small">Étape exécutée.</p>
+                )}
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

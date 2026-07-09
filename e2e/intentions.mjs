@@ -153,4 +153,18 @@ export const INTENTIONS = {
   'W15-01-ranger-dans-dossier-existant': { intention: "Ranger une réponse dans un dossier existant", attendu: "Confirmation « rangée dans le dossier »" },
   'W15-02-ranger-dans-nouveau-dossier': { intention: "Ranger une réponse dans un nouveau dossier", attendu: "Confirmation « rangée dans le dossier »" },
   'W15-03-membre-sans-restreindre': { intention: "Un membre regarde les dossiers", attendu: "Il ne voit pas les contrôles de cloison" },
+  // ── V16. Insight profond ──
+  'W16-01-liste-et-recherche': { intention: "Chercher un avocat par son nom", attendu: "La liste se filtre sur le nom cherché" },
+  'W16-02-tri-taux-estime': { intention: "Classer les avocats par taux de succès estimé", attendu: "Seuls les avocats à ≥10 issues estimables apparaissent" },
+  'W16-03-filtre-matiere-et-vide': { intention: "Filtrer par matière puis chercher un inconnu", attendu: "Le domaine filtre la liste ; état vide propre" },
+  'W16-04-profil-complet': { intention: "Lire une fiche avocat complète", attendu: "Cabinet, issue estimée, montants, positions, activité, juridictions, PDF" },
+  'W16-05-confrere-adversaire': { intention: "Naviguer vers un adversaire récurrent puis revenir", attendu: "Profil du confrère ouvert, fil d'Ariane navigable" },
+  'W16-06-parcours-matiere': { intention: "Explorer une matière depuis un profil et rebondir", attendu: "Tendances de la matière + position de l'avocat + rebond confrère" },
+  'W16-07-comparateur': { intention: "Comparer deux avocats côte à côte", attendu: "Table de comparaison à 2 colonnes puis retour au profil" },
+  'W16-08-export-csv-profil': { intention: "Exporter les décisions d'un avocat en tableur", attendu: "Un fichier CSV nommé d'après l'avocat est téléchargé" },
+  'W16-09-cabinets-liste-et-fiche': { intention: "Étudier un cabinet et ses avocats", attendu: "Fiche cabinet (KPIs + avocats) puis bascule sur un profil" },
+  'W16-10-cabinets-recherche-vide': { intention: "Chercher un cabinet inexistant", attendu: "État vide propre « Aucun cabinet »" },
+  'W16-11-analytics-complet': { intention: "Lire le tableau de bord contentieux complet", attendu: "KPIs (dont montant/délai médians), 3 répartitions, articles visés" },
+  'W16-12-methodo-rgpd': { intention: "Comprendre la méthodologie et exercer un droit RGPD", attendu: "Bloc jurimétrie visible et demande d'opposition enregistrée" },
+  'W16-13-question-nominative-court-circuit': { intention: "Poser une question nominative sur un avocat", attendu: "Le profil court-circuite le RAG (profil + décisions)" },
 };

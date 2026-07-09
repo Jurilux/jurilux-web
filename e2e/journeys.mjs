@@ -1685,6 +1685,77 @@ await journey(browser, 'W22-02-reprendre-depuis-accueil', async (page) => {
   if (!val.includes('Question test de reprise')) throw new Error('reprise non préremplie : ' + val);
 });
 
+// ═══════════ W23. PAPIER À EN-TÊTE — logo du cabinet, signature, visionneuse ═══════════
+// Plus petit PNG du monde (1×1) : suffit à vérifier upload + rendu <img>.
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64');
+const FICHIER_LOGO = { name: 'logo.png', mimeType: 'image/png', buffer: PNG_1PX };
+
+// Chaque parcours W23 utilise un COMPTE FRAIS : le papier à en-tête est un état par
+// utilisateur — un compte partagé rendrait les parcours dépendants de leur ordre.
+const rediger = async (page, instruction) => {
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill(instruction);
+  await page.locator('.draft-setup').getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+};
+
+await journey(browser, 'W23-01-logo-demande-puis-fourni', async (page) => {
+  // Sans logo : le module le DEMANDE. On renseigne le cabinet + on charge le logo →
+  // l'en-tête (logo + nom + date) habille le document.
+  await accueil(page);
+  await register(page, `lh1_${Date.now()}@demo.lu`);
+  await rediger(page, 'Mise en demeure pour loyers impayés');
+  await voir(page, 'Personnalisez votre papier à en-tête');            // l'invite est là
+  await page.locator('.lh-invite input[type=text]').fill('Étude Demo & Associés');
+  await page.locator('.lh-invite input[type=file]').setInputFiles(FICHIER_LOGO);
+  await page.locator('.lh-head .lh-logo').waitFor({ state: 'visible', timeout: 8000 });  // logo rendu
+  await voir(page, 'Étude Demo & Associés');                            // nom du cabinet en en-tête
+  await voir(page, 'Luxembourg, le');                                   // date de courrier
+  await absent(page, 'Personnalisez votre papier à en-tête');           // l'invite a disparu
+});
+
+await journey(browser, 'W23-02-signature-et-visionneuse', async (page) => {
+  // Logo + signature chargés → « Aperçu » ouvre la visionneuse plein écran
+  // (feuille avec en-tête + document + signature).
+  await accueil(page);
+  await register(page, `lh2_${Date.now()}@demo.lu`);
+  await rediger(page, 'Avis sur un préavis de licenciement');
+  await page.locator('.lh-invite input[type=file]').setInputFiles(FICHIER_LOGO);
+  await page.locator('.lh-head .lh-logo').waitFor({ state: 'visible', timeout: 8000 });
+  await page.locator('.lh-sign input[type=file]').setInputFiles(
+    { ...FICHIER_LOGO, name: 'signature.png' });
+  await page.locator('.lh-sign-img').waitFor({ state: 'visible', timeout: 8000 });  // signature rendue
+  // visionneuse
+  await page.getByRole('button', { name: /Aperçu/ }).click();
+  await page.locator('.lh-viewer-sheet').waitFor({ state: 'visible', timeout: 8000 });
+  await page.locator('.lh-viewer-sheet .lh-logo').waitFor({ state: 'visible', timeout: 4000 });      // en-tête
+  await page.locator('.lh-viewer-sheet .lh-sign-img').waitFor({ state: 'visible', timeout: 4000 });  // signature
+  await page.getByRole('button', { name: /Fermer/ }).click();
+  await page.locator('.lh-viewer-sheet').waitFor({ state: 'hidden', timeout: 4000 });
+});
+
+await journey(browser, 'W23-03-en-tete-persistant', async (page) => {
+  // Le papier à en-tête est PERSISTANT : fourni sur un 1er document, il habille d'office
+  // le suivant, et logo/signature restent remplaçables depuis la barre d'actions.
+  await accueil(page);
+  await register(page, `lh3_${Date.now()}@demo.lu`);
+  await rediger(page, 'Note interne sur la non-concurrence');
+  await page.locator('.lh-invite input[type=file]').setInputFiles(FICHIER_LOGO);
+  await page.locator('.lh-head .lh-logo').waitFor({ state: 'visible', timeout: 8000 });
+  await page.locator('.lh-sign input[type=file]').setInputFiles(
+    { ...FICHIER_LOGO, name: 'signature.png' });
+  await page.locator('.lh-sign-img').waitFor({ state: 'visible', timeout: 8000 });
+  // SECOND document : l'en-tête + la signature s'appliquent d'office, sans invite.
+  await rediger(page, 'Courrier client sur une facture contestée');
+  await page.locator('.lh-head .lh-logo').waitFor({ state: 'visible', timeout: 8000 });
+  await page.locator('.lh-sign-img').waitFor({ state: 'visible', timeout: 8000 });
+  await absent(page, 'Personnalisez votre papier à en-tête');   // plus d'invite : déjà fourni
+  await voir(page, 'Logo…');                                    // remplacement possible
+  await voir(page, 'Signature…');
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

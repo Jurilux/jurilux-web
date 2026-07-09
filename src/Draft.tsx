@@ -6,12 +6,12 @@
 //   · RAFFINEMENT itératif (« ajoute un paragraphe sur… ») fondé sur le corpus ;
 //   · ton / longueur, copie, impression PDF, enregistrer la trame comme modèle.
 // Tout est sourcé sur le corpus officiel — brouillon à relire par un avocat.
-import { useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import {
   pdfHref, listWorkspaces, Workspace, Citation,
   redactionModeles, redactionCreerModele, redactionSupprimerModele,
   redactionBrouillons, redactionBrouillon, redactionGenerer, redactionPatch,
-  redactionRaffiner, redactionSupprimer,
+  redactionRaffiner, redactionSupprimer, getBranding, putBranding, Branding,
   ModeleIntegre, ModeleUtilisateur, Brouillon, BrouillonResume, VariableModele,
 } from './api';
 import { renderAnswer } from './App';
@@ -81,13 +81,43 @@ export function DraftEmbedded() {
   const [copied, setCopied] = useState(false);
   // « enregistrer comme modèle »
   const [tplForm, setTplForm] = useState<{ name: string; workspace_id: string } | null>(null);
+  // Papier à en-tête : identité visuelle du cabinet (nom + logo + signature).
+  // Si rien n'est fourni, une invite (rejetable) demande le logo au moment où un document existe.
+  const [brand, setBrand] = useState<Branding | null>(null);
+  const [brandErr, setBrandErr] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);   // visionneuse plein écran du document
+  const [inviteOff, setInviteOff] = useState(() => localStorage.getItem('lh_invite_off') === '1');
+  const [cabinetSaisi, setCabinetSaisi] = useState('');
 
   const chargerCatalogue = () => {
     redactionModeles().then((d) => { setIntegres(d.integres); setPersos(d.modeles); }).catch(() => {});
     redactionBrouillons().then(setBrouillons).catch(() => {});
     listWorkspaces().then(setEspaces).catch(() => {});
+    getBranding().then(setBrand).catch(() => {});
   };
   useEffect(chargerCatalogue, []);
+
+  // Lit une image locale en data-URL (plafonnée ~500 Ko) et l'enregistre côté serveur.
+  const chargerImage = (champ: 'logo' | 'signature') => (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';               // permet de re-choisir le même fichier
+    if (!f) return;
+    setBrandErr(null);
+    if (f.size > 500_000) { setBrandErr('Image trop lourde (max ~500 Ko) — réduisez-la.'); return; }
+    if (!f.type.startsWith('image/')) { setBrandErr('Choisissez une image (PNG, JPG, SVG…).'); return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      const extra = champ === 'logo' && cabinetSaisi.trim() ? { cabinet: cabinetSaisi.trim() } : {};
+      putBranding({ [champ]: String(rd.result), ...extra })
+        .then(setBrand)
+        .catch((err) => setBrandErr(err instanceof Error ? err.message : 'Enregistrement impossible.'));
+    };
+    rd.readAsDataURL(f);
+  };
+  const enregistrerCabinet = () => {
+    if (!cabinetSaisi.trim()) return;
+    putBranding({ cabinet: cabinetSaisi.trim() }).then(setBrand).catch(() => {});
+  };
 
   const varsModele: VariableModele[] = useMemo(() => (
     choix.type === 'integre' ? choix.m.variables :
@@ -175,12 +205,40 @@ export function DraftEmbedded() {
     if (!draft) return;
     const w = window.open('', '_blank');
     if (!w) return;
+    // Papier à en-tête à l'impression : logo + cabinet + date, typographie de courrier
+    // (Palatino/Georgia), bloc de signature — le PDF ressemble à un vrai courrier de cabinet.
+    const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const entete = (brand?.logo || brand?.cabinet) ? `
+      <header class="lh">
+        ${brand?.logo ? `<img class="lh-logo" src="${brand.logo}" alt="">` : ''}
+        <div class="lh-id">
+          ${brand?.cabinet ? `<div class="lh-cab">${brand.cabinet.replace(/</g, '&lt;')}</div>` : ''}
+          <div class="lh-date">Luxembourg, le ${date}</div>
+        </div>
+      </header>` : '';
+    const sign = brand?.signature ? `
+      <div class="sign"><img src="${brand.signature}" alt="Signature">
+        ${brand?.cabinet ? `<div class="sign-name">${brand.cabinet.replace(/</g, '&lt;')}</div>` : ''}</div>` : '';
     w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
       <title>${draft.title.replace(/</g, '&lt;')}</title>
-      <style>body{font:13.5px/1.6 Georgia,serif;color:#1c1b18;max-width:760px;margin:30px auto;padding:0 24px}
-      h1,h2,h3{font-family:Georgia,serif} .foot{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;
-      color:#777;font-size:11px}</style></head><body>
+      <style>
+      body{font:14px/1.7 "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+        color:#1c1b18;max-width:760px;margin:34px auto;padding:0 26px}
+      h1,h2,h3{font-family:inherit;letter-spacing:-.01em} h1{font-size:1.5em} h2{font-size:1.2em}
+      .lh{display:flex;align-items:center;gap:18px;border-bottom:2px solid #1c1b18;
+        padding-bottom:14px;margin-bottom:26px}
+      .lh-logo{max-height:64px;max-width:190px;object-fit:contain}
+      .lh-id{margin-left:auto;text-align:right}
+      .lh-cab{font-variant:small-caps;letter-spacing:.06em;font-size:1.1em;font-weight:600}
+      .lh-date{color:#555;font-size:.85em;font-style:italic}
+      .sign{margin-top:40px;text-align:right}
+      .sign img{max-height:80px;max-width:240px;object-fit:contain}
+      .sign-name{font-variant:small-caps;letter-spacing:.05em;font-size:.95em}
+      .foot{margin-top:30px;border-top:1px solid #ccc;padding-top:8px;color:#777;font-size:11px}
+      </style></head><body>
+      ${entete}
       ${renderAnswer(draft.content, draft.citations || [])}
+      ${sign}
       <div class="foot">Brouillon assisté Jurilux — à relire par un avocat.</div></body></html>`);
     w.document.close();
     w.focus();
@@ -313,8 +371,56 @@ export function DraftEmbedded() {
               <>
                 <input className="draft-title" defaultValue={draft.title} key={draft.id}
                   onBlur={(e) => renommer(e.target.value)} title="Renommer le brouillon" />
-                <div className="draft-doc answer"
-                  dangerouslySetInnerHTML={{ __html: renderAnswer(draft.content, draft.citations || []) }} />
+
+                {/* Invite : pas de logo fourni → on le DEMANDE (rejetable, mémorisé). */}
+                {brand && !brand.logo && !inviteOff && (
+                  <div className="lh-invite">
+                    <p><b>Personnalisez votre papier à en-tête</b> — ajoutez le logo de votre cabinet :
+                      il habillera chaque document (à l'écran comme à l'impression).</p>
+                    <div className="lh-invite-row">
+                      <input type="text" placeholder="Nom du cabinet (ex : Étude Dupont & Associés)"
+                        value={cabinetSaisi} onChange={(e) => setCabinetSaisi(e.target.value)}
+                        onBlur={enregistrerCabinet} />
+                      <label className="ghost lh-file">Charger le logo
+                        <input type="file" accept="image/*" onChange={chargerImage('logo')} hidden />
+                      </label>
+                      <button className="ghost lh-later" title="Ne plus demander"
+                        onClick={() => { setInviteOff(true); localStorage.setItem('lh_invite_off', '1'); }}>
+                        Plus tard
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {brandErr && <p className="warn small">⚠ {brandErr}</p>}
+
+                {/* Le document, sur papier à en-tête : logo + cabinet + date, belle typographie serif. */}
+                <div className="lh-paper">
+                  {(brand?.logo || brand?.cabinet) && (
+                    <header className="lh-head">
+                      {brand?.logo && <img className="lh-logo" src={brand.logo} alt="Logo du cabinet" />}
+                      <div className="lh-id">
+                        {brand?.cabinet && <div className="lh-cabinet">{brand.cabinet}</div>}
+                        <div className="lh-date">Luxembourg, le {new Date().toLocaleDateString('fr-FR',
+                          { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                      </div>
+                    </header>
+                  )}
+                  <div className="draft-doc answer"
+                    dangerouslySetInnerHTML={{ __html: renderAnswer(draft.content, draft.citations || []) }} />
+                  <footer className="lh-sign">
+                    {brand?.signature ? (
+                      <div className="lh-sign-block">
+                        <img className="lh-sign-img" src={brand.signature} alt="Signature" />
+                        {brand?.cabinet && <div className="lh-sign-name">{brand.cabinet}</div>}
+                      </div>
+                    ) : (
+                      <label className="ghost lh-file lh-sign-add" title="Image de votre signature manuscrite (PNG conseillé)">
+                        ✒️ Charger ma signature
+                        <input type="file" accept="image/*" onChange={chargerImage('signature')} hidden />
+                      </label>
+                    )}
+                  </footer>
+                </div>
 
                 {draft.citations.length > 0 && (
                   <div className="sources">
@@ -344,8 +450,19 @@ export function DraftEmbedded() {
                 </div>
 
                 <div className="draft-actions">
+                  <button className="ghost" onClick={() => setViewerOpen(true)}>👁 Aperçu</button>
                   <button className="ghost" onClick={copier}>{copied ? '✓ Copié' : 'Copier'}</button>
                   <button className="ghost" onClick={imprimer}>Imprimer / PDF</button>
+                  {brand?.logo && (
+                    <label className="ghost lh-file" title="Remplacer le logo du cabinet">Logo…
+                      <input type="file" accept="image/*" onChange={chargerImage('logo')} hidden />
+                    </label>
+                  )}
+                  {brand?.signature && (
+                    <label className="ghost lh-file" title="Remplacer la signature">Signature…
+                      <input type="file" accept="image/*" onChange={chargerImage('signature')} hidden />
+                    </label>
+                  )}
                   <button className="ghost" onClick={() => setTplForm({ name: draft.title, workspace_id: '' })}>
                     Enregistrer comme modèle
                   </button>
@@ -388,6 +505,37 @@ export function DraftEmbedded() {
           </div>
         </div>
       </div>
+
+      {/* Visionneuse : le document FINAL sur sa feuille (papier à en-tête + signature),
+          plein écran — ce que verra le destinataire, avant impression. */}
+      {viewerOpen && draft && (
+        <div className="lh-viewer-overlay" onClick={() => setViewerOpen(false)}>
+          <div className="lh-viewer-bar" onClick={(e) => e.stopPropagation()}>
+            <button className="ghost" onClick={imprimer}>Imprimer / PDF</button>
+            <button className="ghost" onClick={() => setViewerOpen(false)}>✕ Fermer</button>
+          </div>
+          <div className="lh-viewer-sheet" onClick={(e) => e.stopPropagation()}>
+            {(brand?.logo || brand?.cabinet) && (
+              <header className="lh-head">
+                {brand?.logo && <img className="lh-logo" src={brand.logo} alt="Logo du cabinet" />}
+                <div className="lh-id">
+                  {brand?.cabinet && <div className="lh-cabinet">{brand.cabinet}</div>}
+                  <div className="lh-date">Luxembourg, le {new Date().toLocaleDateString('fr-FR',
+                    { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                </div>
+              </header>
+            )}
+            <div className="answer"
+              dangerouslySetInnerHTML={{ __html: renderAnswer(draft.content, draft.citations || []) }} />
+            {brand?.signature && (
+              <div className="lh-sign"><div className="lh-sign-block">
+                <img className="lh-sign-img" src={brand.signature} alt="Signature" />
+                {brand?.cabinet && <div className="lh-sign-name">{brand.cabinet}</div>}
+              </div></div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

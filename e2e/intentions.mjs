@@ -196,4 +196,8 @@ export const INTENTIONS = {
   // ── W22. Accueil « Aujourd'hui » (LOT 3) ──
   'W22-01-accueil-tableau-de-bord': { intention: "Prendre ses repères en arrivant", attendu: "L'accueil affiche un tableau de bord (salutation, volumétrie, veille, reprise)" },
   'W22-02-reprendre-depuis-accueil': { intention: "Reprendre une recherche récente", attendu: "L'accueil propose l'historique, un clic pré-remplit le champ" },
+  // ── W23. Papier à en-tête (logo, signature, visionneuse) ──
+  'W23-01-logo-demande-puis-fourni': { intention: "Habiller mes documents du logo du cabinet", attendu: "Le logo est demandé s'il manque ; une fois fourni, l'en-tête (logo + cabinet + date) habille le document" },
+  'W23-02-signature-et-visionneuse': { intention: "Signer et prévisualiser le document final", attendu: "La signature chargée s'affiche ; l'aperçu montre la feuille finale (en-tête + texte + signature)" },
+  'W23-03-en-tete-persistant': { intention: "Retrouver mon papier à en-tête au prochain document", attendu: "L'en-tête habille d'office les nouveaux documents, logo et signature restent remplaçables" },
 };

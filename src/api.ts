@@ -626,6 +626,13 @@ export const redactionRaffiner = (id: number, instruction: string) =>
 export const redactionSupprimer = (id: number) =>
   request<void>(`/api/redaction/brouillons/${id}`, 'DELETE');
 
+// ---------- identité visuelle du cabinet (papier à en-tête de la rédaction) ----------
+export interface Branding { cabinet: string | null; logo: string | null; signature: string | null; }
+export const getBranding = () => request<Branding>('/api/branding');
+/** Mise à jour partielle : champ absent = inchangé, chaîne vide = effacé. */
+export const putBranding = (b: Partial<Record<keyof Branding, string>>) =>
+  request<Branding>('/api/branding', 'PUT', b);
+
 export const insightExportUrl = (q = '', sort = 'cases', matter = '', limit = 200) =>
   '/api/insight/export/lawyers.csv?limit=' + limit + '&sort=' + sort
   + (q ? `&q=${encodeURIComponent(q)}` : '') + (matter ? `&matter=${encodeURIComponent(matter)}` : '');

@@ -185,6 +185,16 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
       .then((p) => { push({ kind: 'lawyer', p }); setCompare(null); })
       .catch((e) => setOpenErr(e instanceof Error ? e.message : "Profil momentanément indisponible"));
   };
+  // Deep-link ⌘K : /insight?a=<name_key> ouvre un avocat, ?f=<cabinet> ouvre une fiche cabinet.
+  const [initialFirm, setInitialFirm] = useState<string | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const a = p.get('a'); const f = p.get('f');
+    if (a) { setView('avocats'); open(a); }
+    else if (f) { setView('cabinets'); setInitialFirm(f); }
+    if (a || f) window.history.replaceState(null, '', '/insight');   // URL propre (pas de ré-ouverture au reload)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const maxCases = list && list.length ? Math.max(...list.map((l) => l.cases)) : 1;
   const sortLabel = sort === 'recent' ? 'activité récente' : sort === 'winrate' ? 'taux estimé favorable' : 'nombre de décisions';
 
@@ -204,7 +214,7 @@ function InsightMain({ stats }: { stats: { lawyers: number; appearances: number 
       </header>
       <main className="admin-main">
         {view === 'methodo' ? <MethodoView /> :
-         view === 'cabinets' ? <FirmsView onOpenLawyer={(k) => { setView('avocats'); open(k); }} /> :
+         view === 'cabinets' ? <FirmsView onOpenLawyer={(k) => { setView('avocats'); open(k); }} initialFirm={initialFirm} /> :
          view === 'analytics' ? <AnalyticsView /> : (
         <>
         <div className="insight-note">
@@ -443,7 +453,7 @@ function ArticlesTable() {
 }
 
 // ---------- Cabinets (dimension B2B) : uniquement les cabinets EXPLICITEMENT nommés ----------
-function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
+function FirmsView({ onOpenLawyer, initialFirm }: { onOpenLawyer: (key: string) => void; initialFirm?: string | null }) {
   const [q, setQ] = useState('');
   const [list, setList] = useState<InsightFirm[] | null>(null);
   const [sel, setSel] = useState<InsightFirmProfile | null>(null);
@@ -453,6 +463,11 @@ function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
     const t = setTimeout(() => { insightFirms(q, 80).then(setList).catch(() => setList([])); }, q ? 250 : 0);
     return () => clearTimeout(t);
   }, [q]);
+
+  // Deep-link ⌘K : ouvre directement la fiche du cabinet demandé.
+  useEffect(() => {
+    if (initialFirm) insightFirm(initialFirm).then(setSel).catch(() => setFirmErr('Cabinet momentanément indisponible.'));
+  }, [initialFirm]);
 
   if (sel) {
     return (

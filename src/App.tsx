@@ -15,6 +15,7 @@ const Alerts = lazy(() => import('./Alerts').then((m) => ({ default: m.Alerts })
 const DraftPanel = lazy(() => import('./Draft').then((m) => ({ default: m.DraftEmbedded })));
 const Account = lazy(() => import('./Account').then((m) => ({ default: m.Account })));
 const InsightPanel = lazy(() => import('./Insight').then((m) => ({ default: m.InsightEmbedded })));
+const CmdK = lazy(() => import('./CmdK').then((m) => ({ default: m.CmdK })));
 
 interface Message {
   id: string;
@@ -633,6 +634,15 @@ export default function App({ initialInsight = false, initialRedaction = false }
   // Menu de compte unifié (avatar → un seul menu : profil, plan, mot de passe, données, déconnexion),
   // identique desktop/mobile. Remplace les actions de compte autrefois éparpillées en 4 endroits.
   const [acctMenuOpen, setAcctMenuOpen] = useState(false);
+  // Palette de commande ⌘K (recherche fédérée). Raccourci global ⌘K / Ctrl+K.
+  const [cmdkOpen, setCmdkOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdkOpen((v) => !v); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [alertUnseen, setAlertUnseen] = useState(0);
   const refreshAlerts = () => { if (getStoredEmail()) listAlerts().then((a) => setAlertUnseen(a.reduce((n, x) => n + x.unseen, 0))).catch(() => {}); };
   useEffect(refreshAlerts, []);
@@ -826,6 +836,11 @@ export default function App({ initialInsight = false, initialRedaction = false }
             title={connected === null ? 'Vérification du corpus…' : connected ? 'Corpus connecté' : 'Service indisponible'} />
         </button>
         <button className="side-cta" onClick={goHome}><span className="plus">+</span> Nouvelle recherche</button>
+        {user && (
+          <button className="side-search" onClick={() => setCmdkOpen(true)} title="Recherche rapide (⌘K)">
+            <span className="ico" aria-hidden="true">🔍</span> Rechercher…<kbd className="side-search-kbd">⌘K</kbd>
+          </button>
+        )}
 
         {/* Navigation à zones (Travailler / Décider / Suivre / Administrer) — même source que le tiroir. */}
         <nav className="side-nav">
@@ -1024,6 +1039,8 @@ export default function App({ initialInsight = false, initialRedaction = false }
           citations: saveItem.citations || [], status: saveItem.status,
         }} />}
         {accountOpen && <Account onClose={() => setAccountOpen(false)} />}
+        {cmdkOpen && <CmdK onClose={() => setCmdkOpen(false)}
+          onAsk={(qq) => { goHome(); submit(qq); }} />}
       </Suspense>
 
       {histOpen && (

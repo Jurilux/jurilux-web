@@ -1616,6 +1616,52 @@ await journey(browser, 'W20-04-admin-sans-double-login', async (page) => {
   await voir(page, 'Tableau de bord', { timeout: 8000 });   // onglets directement présents
 });
 
+// ═══════════════ W21. PALETTE ⌘K — recherche fédérée (LOT 2) ═══════════════
+await journey(browser, 'W21-01-cmdk-raccourci', async (page) => {
+  await entrer(page);
+  await page.keyboard.press('Control+k');                       // raccourci global
+  await page.locator('.cmdk').waitFor({ state: 'visible', timeout: 8000 });
+  await page.keyboard.press('Escape');                          // et se ferme
+  await page.locator('.cmdk').waitFor({ state: 'hidden', timeout: 4000 });
+});
+
+await journey(browser, 'W21-02-cmdk-champ-lateral', async (page) => {
+  await entrer(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('.side-search').click();                   // le champ « Rechercher… » de la barre latérale
+  await page.locator('.cmdk-input').waitFor({ state: 'visible', timeout: 8000 });
+});
+
+await journey(browser, 'W21-03-cmdk-question', async (page) => {
+  await entrer(page);
+  await page.keyboard.press('Control+k');
+  await page.locator('.cmdk-input').fill('Licenciement avec effet immédiat ?');
+  await page.locator('.cmdk-item').filter({ hasText: 'Rechercher' }).first().click();
+  // la recherche RAG se lance dans la vue principale
+  await page.locator('.bubble.user').filter({ hasText: 'Licenciement' }).first().waitFor({ timeout: 12000 });
+});
+
+await journey(browser, 'W21-04-cmdk-avocat', async (page) => {
+  await entrer(page);
+  await page.keyboard.press('Control+k');
+  await page.locator('.cmdk-input').fill('schmit');
+  // cibler le résultat AVOCAT (pas l'item « Rechercher : … » qui contient aussi « schmit »)
+  const av = page.locator('.cmdk-item').filter({ hasText: 'Pierre SCHMIT' }).first();
+  await av.waitFor({ state: 'visible', timeout: 8000 });
+  await av.click();                                             // deep-link → profil Insight
+  await voir(page, 'décision', { timeout: 12000 });             // fiche avocat ouverte
+});
+
+await journey(browser, 'W21-05-cmdk-prefixe-cabinet', async (page) => {
+  await entrer(page);
+  await page.keyboard.press('Control+k');
+  await page.locator('.cmdk-input').fill('c:schmit');            // préfixe cabinet
+  const cab = page.locator('.cmdk-item').filter({ hasText: /ÉTUDE|SCHMIT/i }).first();
+  await cab.waitFor({ state: 'visible', timeout: 8000 });
+  await cab.click();                                            // deep-link → fiche cabinet
+  await voir(page, 'Avocats du cabinet', { timeout: 12000 });
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

@@ -87,7 +87,9 @@ export async function ask(page, q) {
   const input = page.locator('textarea').first();
   await input.waitFor({ timeout: 8000 });
   await input.fill(q);
-  const send = page.getByRole('button', { name: /Rechercher|Envoyer/ }).first();
+  // Bouton d'ENVOI dans la zone de travail (main) — pas le champ « Rechercher… » (⌘K) de la
+  // barre latérale, qui porte aussi le mot « Rechercher ».
+  const send = page.locator('main').getByRole('button', { name: /Rechercher|Envoyer/ }).first();
   if (await send.isVisible().catch(() => false)) await send.click();
   else await input.press('Enter');
 }

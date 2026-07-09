@@ -187,4 +187,10 @@ export const INTENTIONS = {
   'W20-02-compte-unifie': { intention: "Gérer son compte", attendu: "Un seul menu (avatar) rassemble profil, mot de passe et déconnexion" },
   'W20-03-nav-parite-desktop-mobile': { intention: "Retrouver une action sur desktop ET mobile", attendu: "La même navigation alimente la barre latérale et le tiroir" },
   'W20-04-admin-sans-double-login': { intention: "Accéder au backoffice", attendu: "L'admin s'ouvre en réutilisant la session, sans second login" },
+  // ── W21. Palette ⌘K — recherche fédérée (LOT 2) ──
+  'W21-01-cmdk-raccourci': { intention: "Ouvrir la recherche rapide au clavier", attendu: "⌘K ouvre la palette, Échap la ferme" },
+  'W21-02-cmdk-champ-lateral': { intention: "Ouvrir la recherche rapide à la souris", attendu: "Le champ « Rechercher… » de la barre latérale ouvre la palette" },
+  'W21-03-cmdk-question': { intention: "Poser une question depuis la palette", attendu: "Entrée lance la recherche juridique dans la vue principale" },
+  'W21-04-cmdk-avocat': { intention: "Trouver un avocat depuis la palette", attendu: "Le résultat avocat ouvre directement son profil Insight" },
+  'W21-05-cmdk-prefixe-cabinet': { intention: "Trouver un cabinet via le préfixe c:", attendu: "Le résultat cabinet ouvre directement sa fiche" },
 };

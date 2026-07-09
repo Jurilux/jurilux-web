@@ -93,21 +93,20 @@ function MatterJourney({ name, from, onOpenLawyer }: {
   // Volume par année de la matière (barres, même langage visuel que le profil).
   const years = an.by_year.filter((r) => typeof r.cle === 'number')
     .map((r) => ({ y: r.cle as number, n: r.cases })).sort((a, b) => a.y - b.y);
-  const yMax = Math.max(1, ...years.map((r) => r.n));
 
   return (
     <div className="insight-profile matter-journey">
       <h2>{name} <span className="muted small">— tendances de la matière</span></h2>
       <div className="stat-grid">
-        <div className="stat-tile"><div className="stat-label">affaires</div><div className="stat-value">{o.cases.toLocaleString('fr-FR')}</div></div>
-        <div className="stat-tile"><div className="stat-label">taux de succès<sup>*</sup></div><div className="stat-value">{pctFmt(o.win_rate)}</div></div>
+        <StatTile label={<>affaires</>} value={<>{o.cases.toLocaleString('fr-FR')}</>} />
+        <StatTile label={<>taux de succès<sup>*</sup></>} value={<>{pctFmt(o.win_rate)}</>} />
         {o.amount_median != null && (
-          <div className="stat-tile"><div className="stat-label">montant médian<sup>*</sup></div><div className="stat-value">{euroFmt(o.amount_median)}</div></div>
+          <StatTile label={<>montant médian<sup>*</sup></>} value={<>{euroFmt(o.amount_median)}</>} />
         )}
         {o.delai_median != null && (
-          <div className="stat-tile"><div className="stat-label">délai médian<sup>*</sup></div><div className="stat-value">{delaiFmt(o.delai_median)}</div></div>
+          <StatTile label={<>délai médian<sup>*</sup></>} value={<>{delaiFmt(o.delai_median)}</>} />
         )}
-        <div className="stat-tile"><div className="stat-label">avocats actifs</div><div className="stat-value">{o.lawyers.toLocaleString('fr-FR')}</div></div>
+        <StatTile label={<>avocats actifs</>} value={<>{o.lawyers.toLocaleString('fr-FR')}</>} />
       </div>
 
       {fromLine}
@@ -115,14 +114,7 @@ function MatterJourney({ name, from, onOpenLawyer }: {
       {years.length > 1 && (
         <>
           <h3>Volume par année</h3>
-          <div className="year-chart">
-            {years.map((r) => (
-              <div key={r.y} className="year-bar" title={`${r.y} : ${r.n} décision(s)`}>
-                <div className="year-bar-fill" style={{ height: `${Math.round((r.n / yMax) * 100)}%` }} />
-                <span className="year-lbl">{years.length <= 18 || r.y % 5 === 0 ? `’${String(r.y).slice(2)}` : ''}</span>
-              </div>
-            ))}
-          </div>
+          <YearBars points={years} />
         </>
       )}
 
@@ -314,6 +306,32 @@ function delaiFmt(j: number | null | undefined): string {
   return j >= 60 ? `${Math.round(j / 30)} mois` : `${j} j`;
 }
 
+// Tuile de KPI (stat-grid) — un seul gabarit pour profil / cabinet / matière / analytics.
+function StatTile({ label, value, hint }: { label: React.ReactNode; value: React.ReactNode; hint?: string }) {
+  return (
+    <div className="stat-tile" title={hint}>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+    </div>
+  );
+}
+
+// Barres « volume par année » — même langage visuel partout (profil avocat, vue matière).
+function YearBars({ points }: { points: { y: number; n: number }[] }) {
+  if (points.length < 2) return null;
+  const max = Math.max(1, ...points.map((r) => r.n));
+  return (
+    <div className="year-chart">
+      {points.map((r) => (
+        <div key={r.y} className="year-bar" title={`${r.y} : ${r.n} décision(s)`}>
+          <div className="year-bar-fill" style={{ height: `${Math.round((r.n / max) * 100)}%` }} />
+          <span className="year-lbl">{points.length <= 18 || r.y % 5 === 0 ? `’${String(r.y).slice(2)}` : ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AnalyticsTable({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
   const hasAmounts = rows.some((r) => r.amount_median != null);
   return (
@@ -376,20 +394,16 @@ function AnalyticsView() {
     <div className="insight-analytics">
       <h2>Analytics contentieux</h2>
       <div className="stat-grid">
-        <div className="stat-tile"><div className="stat-label">affaires</div><div className="stat-value">{o.cases.toLocaleString('fr-FR')}</div></div>
-        <div className="stat-tile"><div className="stat-label">issues estimables</div><div className="stat-value">{o.decided.toLocaleString('fr-FR')}</div></div>
-        <div className="stat-tile"><div className="stat-label">gagnées</div><div className="stat-value">{o.won.toLocaleString('fr-FR')}</div></div>
-        <div className="stat-tile"><div className="stat-label">taux de succès<sup>*</sup></div><div className="stat-value">{pctFmt(o.win_rate)}</div></div>
-        <div className="stat-tile"><div className="stat-label">avocats</div><div className="stat-value">{o.lawyers.toLocaleString('fr-FR')}</div></div>
+        <StatTile label={<>affaires</>} value={<>{o.cases.toLocaleString('fr-FR')}</>} />
+        <StatTile label={<>issues estimables</>} value={<>{o.decided.toLocaleString('fr-FR')}</>} />
+        <StatTile label={<>gagnées</>} value={<>{o.won.toLocaleString('fr-FR')}</>} />
+        <StatTile label={<>taux de succès<sup>*</sup></>} value={<>{pctFmt(o.win_rate)}</>} />
+        <StatTile label={<>avocats</>} value={<>{o.lawyers.toLocaleString('fr-FR')}</>} />
         {o.amount_median != null && (
-          <div className="stat-tile" title={`médiane sur ${o.amount_n ?? '?'} décision(s) à montant détecté — indicatif`}>
-            <div className="stat-label">montant médian<sup>*</sup></div><div className="stat-value">{euroFmt(o.amount_median)}</div>
-          </div>
+          <StatTile label={<>montant médian<sup>*</sup></>} value={<>{euroFmt(o.amount_median)}</>} hint={`médiane sur ${o.amount_n ?? '?'} décision(s) à montant détecté — indicatif`} />
         )}
         {o.delai_median != null && (
-          <div className="stat-tile" title={`médiane sur ${o.delai_n ?? '?'} décision(s) à délai estimable — indicatif`}>
-            <div className="stat-label">délai médian<sup>*</sup></div><div className="stat-value">{delaiFmt(o.delai_median)}</div>
-          </div>
+          <StatTile label={<>délai médian<sup>*</sup></>} value={<>{delaiFmt(o.delai_median)}</>} hint={`médiane sur ${o.delai_n ?? '?'} décision(s) à délai estimable — indicatif`} />
         )}
       </div>
 
@@ -446,12 +460,12 @@ function FirmsView({ onOpenLawyer }: { onOpenLawyer: (key: string) => void }) {
         <button className="back linklike" onClick={() => setSel(null)}>← Tous les cabinets</button>
         <h2>{sel.firm}</h2>
         <div className="stat-grid">
-          <div className="stat-tile"><div className="stat-label">décisions</div><div className="stat-value">{sel.cases_count}</div></div>
-          <div className="stat-tile"><div className="stat-label">avocats</div><div className="stat-value">{sel.lawyers_count}</div></div>
-          <div className="stat-tile"><div className="stat-label">issue estimée<sup>*</sup></div><div className="stat-value">{pctFmt(sel.win_rate)}</div></div>
-          <div className="stat-tile"><div className="stat-label">période</div><div className="stat-value">{yearsSpan(sel.first_year, sel.last_year)}</div></div>
+          <StatTile label={<>décisions</>} value={<>{sel.cases_count}</>} />
+          <StatTile label={<>avocats</>} value={<>{sel.lawyers_count}</>} />
+          <StatTile label={<>issue estimée<sup>*</sup></>} value={<>{pctFmt(sel.win_rate)}</>} />
+          <StatTile label={<>période</>} value={<>{yearsSpan(sel.first_year, sel.last_year)}</>} />
           {sel.amount_median != null && (
-            <div className="stat-tile"><div className="stat-label">montant médian<sup>*</sup></div><div className="stat-value">{euroFmt(sel.amount_median)}</div></div>
+            <StatTile label={<>montant médian<sup>*</sup></>} value={<>{euroFmt(sel.amount_median)}</>} />
           )}
         </div>
         {sel.matters.length > 0 && (
@@ -588,7 +602,6 @@ function Profile({ p, onBack, onOpen, onCompare, onMatter }: {
   }
   const courts = Object.entries(jc).sort((a, b) => b[1] - a[1]);
   const yrs = Object.keys(yc).map(Number).sort((a, b) => a - b);
-  const yMax = Math.max(1, ...Object.values(yc));
   const allYears = yrs.length ? Array.from({ length: yrs[yrs.length - 1] - yrs[0] + 1 }, (_, i) => yrs[0] + i) : [];
   const winPct = p.decided > 0 ? Math.round((p.won / p.decided) * 100) : null;
 
@@ -620,16 +633,13 @@ function Profile({ p, onBack, onOpen, onCompare, onMatter }: {
         </>
       )}
       <div className="stat-grid">
-        <div className="stat-tile"><div className="stat-label">décisions</div><div className="stat-value">{p.cases_count}</div></div>
-        <div className="stat-tile"><div className="stat-label">période</div><div className="stat-value">{yearsSpan(p.first_year, p.last_year)}</div></div>
-        <div className="stat-tile"><div className="stat-label">juridictions</div><div className="stat-value">{courts.length}</div></div>
+        <StatTile label={<>décisions</>} value={<>{p.cases_count}</>} />
+        <StatTile label={<>période</>} value={<>{yearsSpan(p.first_year, p.last_year)}</>} />
+        <StatTile label={<>juridictions</>} value={<>{courts.length}</>} />
         <div className="stat-tile"><div className="stat-label">issue estimée<sup>*</sup></div>
           <div className="stat-value">{winPct == null ? '—' : `${winPct}%`}</div></div>
         {p.amount_median != null && (
-          <div className="stat-tile" title={`médiane sur ${p.amount_n} décision(s) à montant détecté — indicatif`}>
-            <div className="stat-label">montant médian<sup>*</sup></div>
-            <div className="stat-value">{euroFmt(p.amount_median)}</div>
-          </div>
+          <StatTile label={<>montant médian<sup>*</sup></>} value={<>{euroFmt(p.amount_median)}</>} hint={`médiane sur ${p.amount_n} décision(s) à montant détecté — indicatif`} />
         )}
       </div>
 
@@ -675,14 +685,7 @@ function Profile({ p, onBack, onOpen, onCompare, onMatter }: {
       {allYears.length > 1 && (
         <>
           <h3>Activité par année</h3>
-          <div className="year-chart">
-            {allYears.map((y) => (
-              <div key={y} className="year-bar" title={`${y} : ${yc[y] || 0} décision(s)`}>
-                <div className="year-bar-fill" style={{ height: `${Math.round(((yc[y] || 0) / yMax) * 100)}%` }} />
-                <span className="year-lbl">{allYears.length <= 18 || y % 5 === 0 ? `’${String(y).slice(2)}` : ''}</span>
-              </div>
-            ))}
-          </div>
+          <YearBars points={allYears.map((y) => ({ y, n: yc[y] || 0 }))} />
         </>
       )}
 

@@ -179,4 +179,5 @@ export const INTENTIONS = {
   'W18-06-modele-cabinet-partage': { intention: "Partager un modèle au cabinet", attendu: "Un associé du cabinet voit le modèle partagé" },
   'W18-07-refus-gracieux': { intention: "Demander un document hors droit luxembourgeois", attendu: "Refus gracieux, aucun brouillon créé" },
   'W18-08-suppression-brouillon': { intention: "Supprimer un brouillon", attendu: "Retour à l'état vide de l'atelier" },
+  'W18-09-exemples-et-route': { intention: "Découvrir la rédaction par son URL et un exemple", attendu: "Vue pleine page, exemple qui pré-remplit le formulaire, document généré" },
 };

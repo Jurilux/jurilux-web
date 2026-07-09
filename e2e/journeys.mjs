@@ -1457,8 +1457,9 @@ await journey(browser, 'W18-03-brouillon-persistant-reouverture', async (page) =
   await page.locator('.draft-title').fill('Note NC — dossier X');
   await page.locator('.draft-title').blur();
   await page.waitForTimeout(400);
-  await page.locator('.modal .close').click();
-  await menuItem(page, 'Rédiger');
+  // RECHARGEMENT complet de la page /redaction : le brouillon doit persister côté serveur
+  await page.goto(`${FRONT}/redaction`, { waitUntil: 'networkidle' });
+  await dismissOnboarding(page);
   await page.locator('.draft-open').selectOption({ index: 1 }); // brouillon le plus récent
   await voir(page, 'Document rédigé (test).');
   const titre = await page.locator('.draft-title').inputValue();  // le titre vit dans un <input>
@@ -1536,7 +1537,26 @@ await journey(browser, 'W18-08-suppression-brouillon', async (page) => {
   await voir(page, 'Document rédigé (test).');
   await page.getByRole('button', { name: 'Supprimer', exact: true }).click(); // confirm() auto-accepté
   await page.waitForTimeout(500);
-  await voir(page, 'Le document apparaîtra ici');                // retour à l'état vide
+  await voir(page, 'Exemples — cliquez pour pré-remplir');      // retour à l'état vide (exemples)
+});
+
+
+await journey(browser, 'W18-09-exemples-et-route', async (page) => {
+  // accès direct à la vue interne par l'URL (comme /insight), pas de modale
+  await entrer(page);
+  await page.goto(`${FRONT}/redaction`, { waitUntil: 'networkidle' });
+  await dismissOnboarding(page);
+  await voir(page, 'Rédaction assistée');                        // en-tête de la vue pleine page
+  await voir(page, 'Exemples — cliquez pour pré-remplir');
+  // cliquer un exemple pré-remplit modèle + variables + instruction
+  await page.locator('.draft-ex').filter({ hasText: 'Loyers commerciaux impayés' }).click();
+  const instr = await page.locator('.draft-setup textarea').inputValue();
+  if (!instr.includes('loyers commerciaux')) throw new Error('exemple non chargé : ' + instr);
+  const dest = await page.getByPlaceholder('SARL Exemple, 12 rue X, Luxembourg').inputValue();
+  if (!dest.includes('Bail Center')) throw new Error('variable non préremplie');
+  // il ne reste qu'à lancer
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test). [squelette suivi]');
 });
 
 await browser.close();

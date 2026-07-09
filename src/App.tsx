@@ -12,7 +12,7 @@ const LegalPage = lazy(() => import('./Legal').then((m) => ({ default: m.LegalPa
 const Cabinet = lazy(() => import('./Cabinet').then((m) => ({ default: m.Cabinet })));
 const SaveToDossierModal = lazy(() => import('./Cabinet').then((m) => ({ default: m.SaveToDossierModal })));
 const Alerts = lazy(() => import('./Alerts').then((m) => ({ default: m.Alerts })));
-const Draft = lazy(() => import('./Draft').then((m) => ({ default: m.Draft })));
+const DraftPanel = lazy(() => import('./Draft').then((m) => ({ default: m.DraftEmbedded })));
 const Account = lazy(() => import('./Account').then((m) => ({ default: m.Account })));
 const InsightPanel = lazy(() => import('./Insight').then((m) => ({ default: m.InsightEmbedded })));
 
@@ -564,21 +564,35 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function App({ initialInsight = false }: { initialInsight?: boolean } = {}) {
+export default function App({ initialInsight = false, initialRedaction = false }: { initialInsight?: boolean; initialRedaction?: boolean } = {}) {
   // Insight = VUE INTERNE de l'app (même coquille, même barre latérale) — plus une page à part.
   const [insightOpen, setInsightOpen] = useState(initialInsight);
   const [insightSeen, setInsightSeen] = useState(initialInsight);  // garde le panneau monté (état/requêtes conservés)
   // L'URL reste la source de vérité partageable : /insight à l'ouverture, / à la fermeture.
   const openInsight = () => {
-    setInsightOpen(true); setInsightSeen(true); setMenuOpen(false);
+    setInsightOpen(true); setInsightSeen(true); setRedactionOpen(false); setMenuOpen(false);
     if (window.location.pathname !== '/insight') window.history.pushState({}, '', '/insight');
   };
   const closeInsight = () => {
     setInsightOpen(false);
     if (window.location.pathname === '/insight') window.history.pushState({}, '', '/');
   };
+  // Rédaction = VUE INTERNE (même coquille que l'app / Insight — plus une modale).
+  const [redactionOpen, setRedactionOpen] = useState(initialRedaction);
+  const [redactionSeen, setRedactionSeen] = useState(initialRedaction);  // reste montée (brouillons conservés)
+  const openRedaction = () => {
+    setRedactionOpen(true); setRedactionSeen(true); setInsightOpen(false); setMenuOpen(false);
+    if (window.location.pathname !== '/redaction') window.history.pushState({}, '', '/redaction');
+  };
+  const closeRedaction = () => {
+    setRedactionOpen(false);
+    if (window.location.pathname === '/redaction') window.history.pushState({}, '', '/');
+  };
   useEffect(() => {
-    const onPop = () => setInsightOpen(window.location.pathname === '/insight');
+    const onPop = () => {
+      setInsightOpen(window.location.pathname === '/insight');
+      setRedactionOpen(window.location.pathname === '/redaction');
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -613,8 +627,6 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
   const [saveItem, setSaveItem] = useState<Message | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const openAlerts = () => { setMenuOpen(false); setAlertsOpen(true); };
-  const [draftOpen, setDraftOpen] = useState(false);
-  const openDraft = () => { setMenuOpen(false); setDraftOpen(true); };
   const [accountOpen, setAccountOpen] = useState(false);
   const openAccount = () => { setMenuOpen(false); setAccountOpen(true); };
   const [alertUnseen, setAlertUnseen] = useState(0);
@@ -741,8 +753,8 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
         <button className="side-cta" onClick={goHome}><span className="plus">+</span> Nouvelle recherche</button>
 
         <div className="side-label">Rechercher</div>
-        <button className={`nav-item ${insightOpen ? '' : 'active'}`}
-          onClick={() => { if (insightOpen) closeInsight(); else goHome(); }}><span className="ico">⌕</span> Recherche</button>
+        <button className={`nav-item ${insightOpen || redactionOpen ? '' : 'active'}`}
+          onClick={() => { if (insightOpen) closeInsight(); else if (redactionOpen) closeRedaction(); else goHome(); }}><span className="ico">⌕</span> Recherche</button>
         {user && <button className="nav-item" onClick={openHistory}><span className="ico">◷</span> Historique</button>}
         {user && <button className="nav-item" onClick={openCabinet}><span className="ico">▤</span> Mon cabinet</button>}
         {user && <button className="nav-item" onClick={openAlerts}>
@@ -753,7 +765,7 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
         {user && <>
           <div className="side-label">Mes outils</div>
           <a className="nav-item" href="/vault"><span className="ico">🔒</span> Vault — documents privés</a>
-          <button className="nav-item" onClick={openDraft}><span className="ico">✍️</span> Rédiger</button>
+          <button className={`nav-item ${redactionOpen ? 'active' : ''}`} onClick={openRedaction}><span className="ico">✍️</span> Rédiger</button>
           <button className="nav-item" onClick={openAccount}><span className="ico">⚙️</span> Mon compte</button>
         </>}
 
@@ -809,7 +821,14 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
             </Suspense>
           </div></div>
         )}
-        {insightOpen ? null : messages.length === 0 ? (
+        {redactionSeen && (
+          <div className="content" style={redactionOpen ? undefined : { display: 'none' }}><div className="inner">
+            <Suspense fallback={<div className="route-loading">Chargement…</div>}>
+              <DraftPanel />
+            </Suspense>
+          </div></div>
+        )}
+        {(insightOpen || redactionOpen) ? null : messages.length === 0 ? (
           <div className="content">
             <div className="inner welcome">
               <section className="hero">
@@ -895,7 +914,7 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
               {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
               {user && <button className="nav-item" onClick={openCabinet}>🗂️ Mon cabinet <span className="muted">— dossiers partagés</span></button>}
               {user && <a className="nav-item" href="/vault">🔒 Vault <span className="muted">— vos documents privés</span></a>}
-              {user && <button className="nav-item" onClick={openDraft}>✍️ Rédiger <span className="muted">— brouillon sourcé</span></button>}
+              {user && <button className="nav-item" onClick={openRedaction}>✍️ Rédiger <span className="muted">— brouillon sourcé</span></button>}
               {user && <button className="nav-item" onClick={openAlerts}>🔔 Mes alertes {alertUnseen > 0 && <span className="alert-badge">{alertUnseen}</span>} <span className="muted">— veille</span></button>}
               <button className="nav-item nav-admin" onClick={openInsight}>⚖️ Insight <span className="muted">— avocats</span></button>
               {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
@@ -951,7 +970,6 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
           question: saveItem.question || '', answer: saveItem.content || null,
           citations: saveItem.citations || [], status: saveItem.status,
         }} />}
-        {draftOpen && <Draft onClose={() => setDraftOpen(false)} />}
         {accountOpen && <Account onClose={() => setAccountOpen(false)} />}
       </Suspense>
 

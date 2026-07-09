@@ -21,6 +21,33 @@ type Choix =
   | { type: 'integre'; m: ModeleIntegre }
   | { type: 'perso'; m: ModeleUtilisateur };
 
+// Exemples prêts à l'emploi : pré-remplissent modèle + variables + instruction (l'avocat
+// n'a plus qu'à lancer la rédaction), pour montrer d'emblée ce que le module sait faire.
+interface Exemple {
+  kind: string; titre: string; modele: string; ton?: string;
+  variables: Record<string, string>; instruction: string;
+}
+const EXEMPLES: Exemple[] = [
+  { kind: 'Mise en demeure', titre: 'Loyers commerciaux impayés', modele: 'mise-en-demeure', ton: 'ferme',
+    variables: { destinataire: 'SARL Bail Center, 4 rue de la Gare, L-1611 Luxembourg',
+      objet: 'loyers commerciaux impayés de mars à juin', montant: '18 600 €', delai: '15 jours' },
+    instruction: 'Rédige une mise en demeure pour loyers commerciaux impayés depuis mars, rappelant les obligations du preneur et réservant la résiliation du bail.' },
+  { kind: 'Avis juridique', titre: "Validité d'un préavis de licenciement", modele: 'avis-juridique',
+    variables: { question: 'Le préavis de licenciement de 2 mois est-il valable ?',
+      contexte: "Salarié en CDI, 8 ans d'ancienneté, licencié avec un préavis de 2 mois." },
+    instruction: "Analyse la validité d'un préavis de licenciement de 2 mois pour un salarié de 8 ans d'ancienneté en droit du travail luxembourgeois." },
+  { kind: 'Conclusions', titre: 'Licenciement abusif (tribunal du travail)', modele: 'conclusions',
+    variables: { juridiction: 'Tribunal du travail de Luxembourg', partie: 'Madame X, demanderesse',
+      pretentions: 'licenciement abusif, 25 000 € de dommages et intérêts' },
+    instruction: 'Rédige une trame de conclusions pour un licenciement abusif devant le tribunal du travail.' },
+  { kind: 'Courrier client', titre: 'Contestation d’une facture de travaux', modele: 'courrier-client', ton: 'pedagogique',
+    variables: { situation: "contestation d'une facture de travaux jugée excessive" },
+    instruction: 'Explique au client, de façon accessible, ses droits face à une facture de travaux contestée.' },
+  { kind: 'Note de recherche', titre: 'Clause de non-concurrence', modele: 'note-interne',
+    variables: { sujet: "validité et portée d'une clause de non-concurrence" },
+    instruction: 'Synthétise l’état du droit luxembourgeois sur la validité des clauses de non-concurrence.' },
+];
+
 const TONS = [
   { v: '', l: 'Ton : automatique' },
   { v: 'neutre', l: 'Ton : neutre' },
@@ -33,7 +60,7 @@ const LONGUEURS = [
   { v: 'detaillee', l: 'Longueur : détaillée' },
 ];
 
-export function Draft({ onClose }: { onClose: () => void }) {
+export function DraftEmbedded() {
   // catalogue
   const [integres, setIntegres] = useState<ModeleIntegre[]>([]);
   const [persos, setPersos] = useState<ModeleUtilisateur[]>([]);
@@ -176,25 +203,33 @@ export function Draft({ onClose }: { onClose: () => void }) {
     catch { setError('Suppression du modèle impossible.'); }
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal draft-v2" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>Rédaction assistée</h2>
-          {brouillons.length > 0 && (
-            <select className="draft-open" value="" title="Rouvrir un brouillon"
-              onChange={(e) => { if (e.target.value) ouvrir(Number(e.target.value)); }}>
-              <option value="">Mes brouillons ({brouillons.length})…</option>
-              {brouillons.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.title.slice(0, 60)} · v{b.versions}
-                </option>
-              ))}
-            </select>
-          )}
-          <button className="ghost close" onClick={onClose} aria-label="Fermer">✕</button>
-        </div>
+  const lancerExemple = (ex: Exemple) => {
+    const m = integres.find((x) => x.slug === ex.modele);
+    if (m) setChoix({ type: 'integre', m });
+    setVariables(ex.variables);
+    setInstruction(ex.instruction);
+    setTon(ex.ton || '');
+    setDraft(null); setRefusMsg(null); setError(null);
+  };
 
+  return (
+    <div className="draft-embedded">
+      <header className="draft-head">
+        <h1>Rédaction assistée</h1>
+        {brouillons.length > 0 && (
+          <select className="draft-open" value="" title="Rouvrir un brouillon"
+            onChange={(e) => { if (e.target.value) ouvrir(Number(e.target.value)); }}>
+            <option value="">Mes brouillons ({brouillons.length})…</option>
+            {brouillons.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.title.slice(0, 60)} · v{b.versions}
+              </option>
+            ))}
+          </select>
+        )}
+      </header>
+
+      <div className="draft-body">
         <div className="draft-grid">
           {/* ---- colonne réglages ---- */}
           <div className="draft-setup">
@@ -259,9 +294,21 @@ export function Draft({ onClose }: { onClose: () => void }) {
 
           {/* ---- colonne document ---- */}
           <div className="draft-doc-col">
-            {!draft && <div className="draft-empty muted">
-              Le document apparaîtra ici.<br />Choisissez un modèle, remplissez ses champs, décrivez le besoin.
-            </div>}
+            {!draft && (
+              <div className="draft-exemples">
+                <h3>Exemples — cliquez pour pré-remplir</h3>
+                <p className="muted small">Un modèle, ses variables et une instruction sont chargés ; il ne reste qu'à cliquer « Rédiger ».</p>
+                <div className="draft-ex-grid">
+                  {EXEMPLES.map((ex) => (
+                    <button key={ex.titre} className="draft-ex" onClick={() => lancerExemple(ex)}>
+                      <span className="draft-ex-kind">{ex.kind}</span>
+                      <span className="draft-ex-title">{ex.titre}</span>
+                      <span className="draft-ex-desc muted">{ex.instruction}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {draft && (
               <>
                 <input className="draft-title" defaultValue={draft.title} key={draft.id}

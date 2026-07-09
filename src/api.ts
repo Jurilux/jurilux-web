@@ -580,6 +580,52 @@ export const insightArticles = (limit = 15) =>
   adminGet<{ items: InsightArticle[] }>(`/api/insight/articles?limit=${limit}`).then((d) => d.items);
 export const insightRgpdRequest = (name: string, kind: string, email?: string, message?: string) =>
   request<void>('/api/insight/rgpd-request', 'POST', { name, kind, email: email || null, message: message || null });
+// ---------- Rédaction v2 : modèles, brouillons persistants, versions, raffinement ----------
+export interface VariableModele { cle: string; libelle: string; exemple?: string; }
+export interface ModeleIntegre {
+  slug: string; name: string; kind: string; description: string;
+  variables: VariableModele[]; body: string;
+}
+export interface ModeleUtilisateur {
+  id: number; name: string; kind: string | null; body: string;
+  variables: VariableModele[]; workspace_id: number | null; scope: 'perso' | 'cabinet';
+}
+export interface VersionBrouillon {
+  id: number; motif: string | null; created_at: string; content: string; citations: Citation[];
+}
+export interface Brouillon {
+  id: number; title: string; modele: string | null; variables: Record<string, string>;
+  content: string; citations: Citation[]; created_at: string; updated_at: string;
+  versions: VersionBrouillon[];
+}
+export interface BrouillonResume {
+  id: number; title: string; modele: string | null;
+  created_at: string; updated_at: string; versions: number;
+}
+export interface GenererPayload {
+  instruction: string; title?: string; modele?: string; template_id?: number;
+  variables?: Record<string, string>; ton?: string; longueur?: string;
+}
+export const redactionModeles = () =>
+  request<{ integres: ModeleIntegre[]; modeles: ModeleUtilisateur[] }>('/api/redaction/modeles');
+export const redactionCreerModele = (name: string, body: string, kind?: string,
+                                     variables?: VariableModele[], workspace_id?: number) =>
+  request<ModeleUtilisateur>('/api/redaction/modeles', 'POST', { name, body, kind, variables, workspace_id });
+export const redactionSupprimerModele = (id: number) =>
+  request<void>(`/api/redaction/modeles/${id}`, 'DELETE');
+export const redactionBrouillons = () =>
+  request<{ items: BrouillonResume[] }>('/api/redaction/brouillons').then((d) => d.items);
+export const redactionBrouillon = (id: number) =>
+  request<Brouillon>(`/api/redaction/brouillons/${id}`);
+export const redactionGenerer = (p: GenererPayload) =>
+  request<{ refused: boolean; answer?: string; draft?: Brouillon }>('/api/redaction/brouillons', 'POST', p);
+export const redactionPatch = (id: number, patch: { title?: string; content?: string }) =>
+  request<Brouillon>(`/api/redaction/brouillons/${id}`, 'PATCH', patch);
+export const redactionRaffiner = (id: number, instruction: string) =>
+  request<{ refused: boolean; draft: Brouillon }>(`/api/redaction/brouillons/${id}/raffiner`, 'POST', { instruction });
+export const redactionSupprimer = (id: number) =>
+  request<void>(`/api/redaction/brouillons/${id}`, 'DELETE');
+
 export const insightExportUrl = (q = '', sort = 'cases', matter = '', limit = 200) =>
   '/api/insight/export/lawyers.csv?limit=' + limit + '&sort=' + sort
   + (q ? `&q=${encodeURIComponent(q)}` : '') + (matter ? `&matter=${encodeURIComponent(matter)}` : '');

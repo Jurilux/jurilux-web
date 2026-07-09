@@ -4,7 +4,7 @@ import {
   adminSetPlan, adminSetAdmin, adminDeleteUser,
   adminHealth, adminGetConfig, adminPatchConfig, adminAudit, adminPurge,
   adminTests, adminTestsRun, adminTestsImport, AdminTests, FSection, FRes,
-  adminLogin, logout, getStoredEmail, HttpError,
+  logout, HttpError,
   AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit, EvalReport,
   AdminHealth, AuditEntry,
 } from './api';
@@ -47,44 +47,20 @@ function fmtAgo(seconds: number | null | undefined): string {
   return `il y a ${Math.round(seconds / 86400)} j`;
 }
 
-// ---------- login ----------
-function AdminLogin({ onDone }: { onDone: () => void }) {
-  const [email, setEmail] = useState(getStoredEmail() || '');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      await adminLogin(email.trim(), password);
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Échec de connexion');
-    } finally {
-      setBusy(false);
-    }
-  };
-
+// ---------- reconnexion ----------
+// Plus de formulaire de connexion DÉDIÉ au backoffice : tout le site passe déjà par le mur
+// d'authentification unique (AuthGate). L'admin réutilise donc la MÊME session — aucune double
+// connexion. Ce panneau n'apparaît qu'en cas de session expirée en cours de route : il renvoie
+// au mur unique plutôt que de dupliquer un second login.
+function AdminReconnect() {
   return (
     <div className="admin-gate">
-      <form className="admin-login" onSubmit={submit}>
+      <div className="admin-login">
         <div className="admin-brand"><span className="logo">⚖</span><strong>Jurilux</strong>
           <span className="admin-tag">Backoffice</span></div>
-        <p className="muted">Espace réservé aux administrateurs.</p>
-        <label>Email
-          <input type="email" required autoFocus value={email}
-            onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.lu" />
-        </label>
-        <label>Mot de passe
-          <input type="password" required value={password}
-            onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-        </label>
-        {error && <p className="warn">⚠ {error}</p>}
-        <button className="send" type="submit" disabled={busy}>{busy ? '…' : 'Se connecter'}</button>
-      </form>
+        <p className="muted">Votre session a expiré.</p>
+        <button className="send" onClick={() => { window.location.href = '/'; }}>Se reconnecter</button>
+      </div>
     </div>
   );
 }
@@ -940,10 +916,10 @@ export default function AdminApp() {
     try { await loadOverview(); } finally { setRefreshing(false); }
   };
 
-  const doLogout = async () => { await logout(); setOv(null); setPhase('login'); };
+  const doLogout = async () => { await logout(); window.location.href = '/'; };
 
   if (phase === 'loading') return <div className="admin-gate"><p className="muted">Chargement…</p></div>;
-  if (phase === 'login') return <AdminLogin onDone={loadOverview} />;
+  if (phase === 'login') return <AdminReconnect />;
   if (phase === 'denied') {
     return (
       <div className="admin-gate">

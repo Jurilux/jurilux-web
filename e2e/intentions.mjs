@@ -182,4 +182,9 @@ export const INTENTIONS = {
   'W18-09-exemples-et-route': { intention: "Découvrir la rédaction par son URL et un exemple", attendu: "Vue pleine page, exemple qui pré-remplit le formulaire, document généré" },
   // ── W19. Carte thématique sur TOUTES les réponses (y compris de suivi) ──
   'W19-01-carte-sur-reponse-suivi': { intention: "Approfondir via une question de suivi", attendu: "La réponse de suivi est aussi présentée en carte thématique, pas en texte brut" },
+  // ── W20. Ergonomie unifiée (LOT 1) ──
+  'W20-01-zones-navigation': { intention: "Se repérer dans la navigation", attendu: "La barre latérale est organisée par zones d'intention (Travailler/Décider/Suivre)" },
+  'W20-02-compte-unifie': { intention: "Gérer son compte", attendu: "Un seul menu (avatar) rassemble profil, mot de passe et déconnexion" },
+  'W20-03-nav-parite-desktop-mobile': { intention: "Retrouver une action sur desktop ET mobile", attendu: "La même navigation alimente la barre latérale et le tiroir" },
+  'W20-04-admin-sans-double-login': { intention: "Accéder au backoffice", attendu: "L'admin s'ouvre en réutilisant la session, sans second login" },
 };

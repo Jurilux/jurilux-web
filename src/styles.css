@@ -64,6 +64,40 @@ body {
 .side-legal { font-size: 11.5px; color: var(--muted-2); text-align: left; padding: 3px 6px; text-decoration: none; }
 .side-legal:hover { color: var(--primary); }
 .side-dot { margin-left: auto; }
+
+/* --- LOT 1 : navigation à zones + menu de compte unifié (une seule source desktop/mobile) --- */
+.side-nav { display: flex; flex-direction: column; }
+.side-zone { display: flex; flex-direction: column; gap: 2px; }
+.sidebar .nav-item .nav-label-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .nav-item .nav-desc { display: none; }   /* barre latérale compacte : label seul */
+
+.side-acct { position: relative; }
+.side-acct-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px; border-radius: 10px;
+  background: none; border: none; cursor: pointer; font: inherit; text-align: left; transition: .12s; }
+.side-acct-btn:hover, .side-acct-btn.on { background: var(--border-2); }
+.side-acct-btn .who { min-width: 0; display: flex; flex-direction: column; }
+.side-acct-btn .em { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-acct-btn .plan { font-family: var(--mono); font-size: 10px; color: var(--muted-2); }
+.side-acct-btn .caret { margin-left: auto; color: var(--muted-2); font-size: 11px; }
+
+.acct-backdrop { position: fixed; inset: 0; z-index: 40; }
+.acct-menu { position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; z-index: 41;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px;
+  box-shadow: 0 8px 30px rgba(23,54,92,.16); display: flex; flex-direction: column; gap: 2px; }
+.acct-id { display: flex; align-items: center; gap: 10px; padding: 4px 6px 8px; }
+.acct-id-txt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.acct-id-txt .em { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-quota { font-family: var(--mono); font-size: 11px; padding: 0 6px 6px; }
+.acct-link { display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  font: inherit; font-size: 13.5px; color: var(--text); padding: 8px; border-radius: 8px; }
+.acct-link:hover { background: var(--primary-soft); }
+.acct-link .muted { font-size: 12px; }
+.acct-logout { margin-top: 4px; border-top: 1px solid var(--border-2); color: var(--ko); font-weight: 600; border-radius: 0 0 8px 8px; }
+
+/* tiroir mobile : mêmes zones + menu de compte (rendu à plat, sans popover) */
+.nav-zone { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.nav-zone .nav-label { padding: 10px 12px 3px; }
+.nav-account .acct-menu { position: static; box-shadow: none; border: none; padding: 0; background: none; }
 .pedago-filter { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text);
   cursor: pointer; width: 100%; margin-top: 2px; }
 .pedago-filter input { accent-color: var(--primary); width: 15px; height: 15px; }

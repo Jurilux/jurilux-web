@@ -129,7 +129,7 @@ await journey(browser, 'C04-deconnexion', async (page) => {
   await accueil(page);
   await login(page, 'pro@demo.lu');
   await ouvrirMenu(page);
-  const bye = page.locator('.nav-drawer').getByRole('button', { name: 'Déconnexion' });
+  const bye = page.locator('.nav-drawer').getByRole('button', { name: 'Se déconnecter' });
   await bye.waitFor({ state: 'visible', timeout: 8000 });
   await bye.click();
   await page.waitForTimeout(700);
@@ -1410,12 +1410,13 @@ await journey(browser, 'W16-15-cabinet-en-echec-message', async (page) => {
 
 
 await journey(browser, 'W17-01-deconnexion-desktop', async (page) => {
-  // Régression signalée : « sur ordi je ne vois pas de bouton se déconnecter » — le bouton
-  // n'existait QUE dans le tiroir mobile ☰ (tous nos parcours navigant par lui, rien ne le voyait).
+  // Régression signalée : « sur ordi je ne vois pas de bouton se déconnecter ». La déconnexion
+  // vit désormais dans le MENU DE COMPTE UNIFIÉ (avatar → menu), identique desktop/mobile.
   await entrer(page);
   await page.setViewportSize({ width: 1280, height: 900 });   // vue DESKTOP explicite
+  await page.locator('aside .side-acct-btn').click();          // ouvrir le menu de compte (avatar)
   const btn = page.locator('aside').getByRole('button', { name: 'Se déconnecter' });
-  await btn.waitFor({ state: 'visible', timeout: 8000 });     // visible SANS ouvrir de menu
+  await btn.waitFor({ state: 'visible', timeout: 8000 });
   await btn.click();
   await voir(page, 'accès réservé');                          // retour au mur (site privé)
 });
@@ -1471,7 +1472,8 @@ await journey(browser, 'W18-04-restaurer-version', async (page) => {
   await menuItem(page, 'Rédiger');
   await page.setViewportSize({ width: 1280, height: 1600 });   // desktop haut : l'historique tient à l'écran
   await page.locator('.draft-setup textarea').fill('Conclusions licenciement abusif');
-  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  // Desktop : la barre latérale porte aussi un item « Rédiger » → cibler le bouton de génération.
+  await page.locator('.draft-setup').getByRole('button', { name: 'Rédiger', exact: true }).click();
   await voir(page, 'Document rédigé (test).');
   await page.getByPlaceholder(/Raffiner :/).fill('raccourcis la discussion');
   await page.getByRole('button', { name: 'Raffiner' }).click();
@@ -1554,8 +1556,8 @@ await journey(browser, 'W18-09-exemples-et-route', async (page) => {
   if (!instr.includes('loyers commerciaux')) throw new Error('exemple non chargé : ' + instr);
   const dest = await page.getByPlaceholder('SARL Exemple, 12 rue X, Luxembourg').inputValue();
   if (!dest.includes('Bail Center')) throw new Error('variable non préremplie');
-  // il ne reste qu'à lancer
-  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  // il ne reste qu'à lancer (desktop : cibler le bouton de génération, pas l'item de barre latérale)
+  await page.locator('.draft-setup').getByRole('button', { name: 'Rédiger', exact: true }).click();
   await voir(page, 'Document rédigé (test). [squelette suivi]');
 });
 
@@ -1572,6 +1574,46 @@ await journey(browser, 'W19-01-carte-sur-reponse-suivi', async (page) => {
   await page.locator('.followup-btn').first().click();
   // la réponse de SUIVI est elle aussi présentée en carte (≥ 2 constellations au total)
   await page.locator('.tmap').nth(1).waitFor({ timeout: 15000 });
+});
+
+// ═══════════════ W20. ERGONOMIE UNIFIÉE — nav à zones + compte unifié (LOT 1) ═══════════════
+await journey(browser, 'W20-01-zones-navigation', async (page) => {
+  // La barre latérale organise la navigation par INTENTION (zones), plus par module.
+  await entrer(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const zone of ['Travailler', 'Décider', 'Suivre']) {
+    await page.locator('aside').getByText(zone, { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
+  }
+  await voir(page, 'Rédiger');     // item de la zone Travailler
+  await voir(page, 'Insight');     // item de la zone Décider
+});
+
+await journey(browser, 'W20-02-compte-unifie', async (page) => {
+  // Un SEUL menu de compte (avatar) rassemble ce qui était éparpillé en 4 endroits.
+  await entrer(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('aside .side-acct-btn').click();
+  await voir(page, 'Mon compte');
+  await voir(page, 'Changer de mot de passe');
+  await page.locator('aside').getByRole('button', { name: 'Se déconnecter' }).waitFor({ state: 'visible', timeout: 8000 });
+});
+
+await journey(browser, 'W20-03-nav-parite-desktop-mobile', async (page) => {
+  // La MÊME source de navigation alimente desktop et mobile : « Rédiger » présent des deux côtés
+  // (fin de la divergence qui avait masqué la déconnexion sur desktop).
+  await entrer(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('aside').getByText('Rédiger', { exact: false }).first().waitFor({ state: 'visible', timeout: 8000 });
+  await ouvrirMenu(page);   // tiroir ☰ (mobile)
+  await page.locator('.nav-drawer').getByText('Rédiger', { exact: false }).first().waitFor({ state: 'visible', timeout: 8000 });
+});
+
+await journey(browser, 'W20-04-admin-sans-double-login', async (page) => {
+  // L'admin réutilise la session de l'app : après le mur unique, /admin s'ouvre SANS second login.
+  await accueil(page);
+  await login(page, 'admin@demo.lu');
+  await page.goto(`${FRONT}/admin`, { waitUntil: 'networkidle' });
+  await voir(page, 'Tableau de bord', { timeout: 8000 });   // onglets directement présents
 });
 
 await browser.close();

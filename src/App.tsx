@@ -629,7 +629,10 @@ export default function App({ initialInsight = false, initialRedaction = false }
   const [alertsOpen, setAlertsOpen] = useState(false);
   const openAlerts = () => { setMenuOpen(false); setAlertsOpen(true); };
   const [accountOpen, setAccountOpen] = useState(false);
-  const openAccount = () => { setMenuOpen(false); setAccountOpen(true); };
+  const openAccount = () => { setMenuOpen(false); setAcctMenuOpen(false); setAccountOpen(true); };
+  // Menu de compte unifié (avatar → un seul menu : profil, plan, mot de passe, données, déconnexion),
+  // identique desktop/mobile. Remplace les actions de compte autrefois éparpillées en 4 endroits.
+  const [acctMenuOpen, setAcctMenuOpen] = useState(false);
   const [alertUnseen, setAlertUnseen] = useState(0);
   const refreshAlerts = () => { if (getStoredEmail()) listAlerts().then((a) => setAlertUnseen(a.reduce((n, x) => n + x.unseen, 0))).catch(() => {}); };
   useEffect(refreshAlerts, []);
@@ -743,6 +746,77 @@ export default function App({ initialInsight = false, initialRedaction = false }
     </div>
   ) : null;
 
+  // ─── Navigation : UNE SEULE source, rendue à l'identique dans la barre latérale (desktop)
+  // et le tiroir (mobile). Fini les deux inventaires maintenus à la main — cause du bug
+  // « déconnexion absente sur desktop ». Zones par INTENTION : l'utilisateur pense en tâches.
+  type NavItem = {
+    key: string; icon: string; label: string; desc?: string; badge?: number;
+    active?: boolean; href?: string; run?: () => void; gate: 'always' | 'user' | 'admin';
+  };
+  const navZones: { zone: string; items: NavItem[] }[] = [
+    { zone: 'Travailler', items: [
+      { key: 'recherche', icon: '🔍', label: 'Recherche', desc: 'juridique',
+        active: !insightOpen && !redactionOpen, gate: 'always',
+        run: () => { if (insightOpen) closeInsight(); else if (redactionOpen) closeRedaction(); else goHome(); } },
+      { key: 'rediger', icon: '✍️', label: 'Rédiger', desc: 'brouillon sourcé',
+        active: redactionOpen, run: openRedaction, gate: 'user' },
+      { key: 'vault', icon: '🔒', label: 'Vault', desc: 'documents privés', href: '/vault', gate: 'user' },
+    ] },
+    { zone: 'Décider', items: [
+      { key: 'insight', icon: '⚖️', label: 'Insight — avocats', desc: 'analytics contentieux',
+        active: insightOpen, run: openInsight, gate: 'always' },
+    ] },
+    { zone: 'Suivre', items: [
+      { key: 'alertes', icon: '🔔', label: 'Alertes', desc: 'veille', badge: alertUnseen,
+        run: openAlerts, gate: 'user' },
+      { key: 'cabinet', icon: '🗂️', label: 'Mon cabinet', desc: 'dossiers partagés',
+        run: openCabinet, gate: 'user' },
+      { key: 'historique', icon: '🕘', label: 'Historique', run: openHistory, gate: 'user' },
+    ] },
+    { zone: 'Administrer', items: [
+      { key: 'admin', icon: '▦', label: 'Administration', desc: 'backoffice', href: '/admin', gate: 'admin' },
+    ] },
+  ];
+  const gateOk = (g: NavItem['gate']) => g === 'always' || (g === 'user' && !!user) || (g === 'admin' && !!account?.is_admin);
+  const visibleZones = navZones
+    .map((z) => ({ ...z, items: z.items.filter((it) => gateOk(it.gate)) }))
+    .filter((z) => z.items.length > 0);
+
+  // `compact` (barre latérale) : on N'INCLUT PAS la description dans le DOM (plutôt que la
+  // masquer en CSS) — sinon un texte caché « shadow » les recherches getByText/voir des tests.
+  const NavButton = ({ it, onNavigate, compact }: { it: NavItem; onNavigate?: () => void; compact?: boolean }) => {
+    const inner = <>
+      <span className="ico" aria-hidden="true">{it.icon}</span>
+      <span className="nav-label-txt">{it.label}{it.desc && !compact && <span className="nav-desc"> — {it.desc}</span>}</span>
+      {it.badge ? <span className="badge">{it.badge}</span> : null}
+    </>;
+    const cls = `nav-item${it.active ? ' active' : ''}`;
+    return it.href
+      ? <a className={cls} href={it.href} onClick={onNavigate}>{inner}</a>
+      : <button className={cls} onClick={() => { it.run?.(); onNavigate?.(); }}>{inner}</button>;
+  };
+
+  // Menu de compte unifié : avatar → un seul menu (profil, plan/quota, mot de passe, données,
+  // déconnexion). Rendu identique dans la barre latérale et le tiroir.
+  const AccountMenu = ({ onNavigate }: { onNavigate?: () => void }) => {
+    if (!user || !account) return null;
+    return (
+      <div className="acct-menu">
+        <div className="acct-id">
+          <span className="avatar">{user.charAt(0).toUpperCase()}</span>
+          <span className="acct-id-txt"><span className="em" title={user}>{user}</span>
+            <span className={`plan-badge plan-${account.plan}`}>{account.plan === 'pro' ? 'Plan pro' : 'Plan étudiant'}</span></span>
+        </div>
+        {account.plan === 'student' && account.quota.limit != null &&
+          <div className="acct-quota muted">{account.quota.remaining} / {account.quota.limit} questions restantes ce mois</div>}
+        <button className="acct-link" onClick={() => { openAccount(); onNavigate?.(); }}>⚙️ Mon compte <span className="muted">— clés, prompts, données</span></button>
+        <button className="acct-link" onClick={() => { openPassword(); onNavigate?.(); }}>🔑 Changer de mot de passe</button>
+        <button className="acct-link" onClick={() => { openLegal(); onNavigate?.(); }}>📄 Mentions &amp; confidentialité</button>
+        <button className="acct-link acct-logout" onClick={doLogout}>Se déconnecter</button>
+      </div>
+    );
+  };
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -753,46 +827,38 @@ export default function App({ initialInsight = false, initialRedaction = false }
         </button>
         <button className="side-cta" onClick={goHome}><span className="plus">+</span> Nouvelle recherche</button>
 
-        <div className="side-label">Rechercher</div>
-        <button className={`nav-item ${insightOpen || redactionOpen ? '' : 'active'}`}
-          onClick={() => { if (insightOpen) closeInsight(); else if (redactionOpen) closeRedaction(); else goHome(); }}><span className="ico">⌕</span> Recherche</button>
-        {user && <button className="nav-item" onClick={openHistory}><span className="ico">◷</span> Historique</button>}
-        {user && <button className="nav-item" onClick={openCabinet}><span className="ico">▤</span> Mon cabinet</button>}
-        {user && <button className="nav-item" onClick={openAlerts}>
-          <span className="ico">◆</span> Alertes{alertUnseen > 0 && <span className="badge">{alertUnseen}</span>}</button>}
-
-        {/* Outils du compte : présents aussi dans le tiroir mobile, mais indispensables ici
-            car la barre latérale est la seule navigation sur desktop (le tiroir ☰ y est masqué). */}
-        {user && <>
-          <div className="side-label">Mes outils</div>
-          <a className="nav-item" href="/vault"><span className="ico">🔒</span> Vault — documents privés</a>
-          <button className={`nav-item ${redactionOpen ? 'active' : ''}`} onClick={openRedaction}><span className="ico">✍️</span> Rédiger</button>
-          <button className="nav-item" onClick={openAccount}><span className="ico">⚙️</span> Mon compte</button>
-        </>}
-
-        <div className="side-label">Explorer</div>
-        <button className={`nav-item ${insightOpen ? 'active' : ''}`}
-          onClick={openInsight}>
-          <span className="ico">⚖</span> Insight — avocats</button>
-        {account?.is_admin && <a className="nav-item" href="/admin"><span className="ico">▦</span> Administration</a>}
+        {/* Navigation à zones (Travailler / Décider / Suivre / Administrer) — même source que le tiroir. */}
+        <nav className="side-nav">
+          {visibleZones.map((z) => (
+            <div className="side-zone" key={z.zone}>
+              <div className="side-label">{z.zone}</div>
+              {z.items.map((it) => <NavButton key={it.key} it={it} compact />)}
+            </div>
+          ))}
+        </nav>
 
         <div className="side-foot">
           {user ? (
-            <div className="side-account">
-              <span className="avatar">{user.charAt(0).toUpperCase()}</span>
-              <span className="who">
-                <span className="em" title={user}>{user}</span>
-                <span className="plan">{account?.plan === 'pro' ? 'Plan pro' : 'Plan étudiant'}</span>
-              </span>
-              {account?.plan === 'student' && account.quota.limit != null &&
-                <span className="quota">{account.quota.used}/{account.quota.limit}</span>}
+            <div className="side-acct">
+              <button className={`side-acct-btn${acctMenuOpen ? ' on' : ''}`}
+                onClick={() => setAcctMenuOpen((v) => !v)} aria-haspopup="menu" aria-expanded={acctMenuOpen}>
+                <span className="avatar">{user.charAt(0).toUpperCase()}</span>
+                <span className="who">
+                  <span className="em" title={user}>{user}</span>
+                  <span className="plan">{account?.plan === 'pro' ? 'Plan pro' : 'Plan étudiant'}
+                    {account?.plan === 'student' && account.quota.limit != null ? ` · ${account.quota.used}/${account.quota.limit}` : ''}</span>
+                </span>
+                <span className="caret" aria-hidden="true">▾</span>
+              </button>
+              {acctMenuOpen && <>
+                <div className="acct-backdrop" onClick={() => setAcctMenuOpen(false)} />
+                <AccountMenu onNavigate={() => setAcctMenuOpen(false)} />
+              </>}
             </div>
           ) : (
             <button className="side-signin" onClick={() => setAuthOpen(true)}>Se connecter</button>
           )}
           <div className="side-links">
-            {/* Déconnexion accessible AUSSI sur desktop (n'existait que dans le tiroir mobile ☰). */}
-            {user && <button className="side-logout-link linklike" onClick={doLogout}>Se déconnecter</button>}
             <button className="side-legal linklike" onClick={() => setLegalOpen(true)}>Mentions &amp; confidentialité</button>
           </div>
         </div>
@@ -909,34 +975,21 @@ export default function App({ initialInsight = false, initialRedaction = false }
               <div className="brand"><span className="logo">⚖</span><strong>Jurilux</strong></div>
               <button className="ghost close" onClick={() => setMenuOpen(false)} aria-label="Fermer">✕</button>
             </div>
+            {/* Même navigation à zones que la barre latérale — une seule source. */}
             <nav className="nav-list">
-              <button className="nav-item" onClick={goHome}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
-              {user && <button className="nav-item" onClick={openHistory}>🕑 Mon historique</button>}
-              {user && <button className="nav-item" onClick={openCabinet}>🗂️ Mon cabinet <span className="muted">— dossiers partagés</span></button>}
-              {user && <a className="nav-item" href="/vault">🔒 Vault <span className="muted">— vos documents privés</span></a>}
-              {user && <button className="nav-item" onClick={openRedaction}>✍️ Rédiger <span className="muted">— brouillon sourcé</span></button>}
-              {user && <button className="nav-item" onClick={openAlerts}>🔔 Mes alertes {alertUnseen > 0 && <span className="alert-badge">{alertUnseen}</span>} <span className="muted">— veille</span></button>}
-              <button className="nav-item nav-admin" onClick={openInsight}>⚖️ Insight <span className="muted">— avocats</span></button>
-              {account?.is_admin && <a className="nav-item nav-admin" href="/admin">🎛️ Administration <span className="muted">— backoffice</span></a>}
-              {user && <button className="nav-item" onClick={openAccount}>⚙️ Mon compte <span className="muted">— clés, prompts, données</span></button>}
+              <button className="nav-item" onClick={() => { goHome(); setMenuOpen(false); }}>🏠 Accueil <span className="muted">— nouvelle recherche</span></button>
+              {visibleZones.map((z) => (
+                <div className="nav-zone" key={z.zone}>
+                  <div className="nav-label">{z.zone}</div>
+                  {z.items.map((it) => <NavButton key={it.key} it={it} onNavigate={() => setMenuOpen(false)} />)}
+                </div>
+              ))}
               {!user && <button className="nav-item" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>👤 Se connecter / créer un compte</button>}
-              <button className="nav-item" onClick={openLegal}>📄 Mentions légales &amp; confidentialité</button>
             </nav>
 
             {user && account && (
               <div className="nav-account">
-                <div className="nav-label">Mon compte</div>
-                <div className="account-email" title={user}>{user}</div>
-                <div className="plan-row">
-                  <span className={`plan-badge plan-${account.plan}`}>{account.plan === 'pro' ? 'Pro' : 'Étudiant'}</span>
-                  {account.quota.limit != null && (
-                    <span className="muted">{account.quota.remaining} / {account.quota.limit} questions restantes ce mois</span>
-                  )}
-                </div>
-                <div className="account-actions">
-                  <button className="ghost" onClick={openPassword}>Changer de mot de passe</button>
-                  <button className="ghost" onClick={doLogout}>Déconnexion</button>
-                </div>
+                <AccountMenu onNavigate={() => setMenuOpen(false)} />
               </div>
             )}
 

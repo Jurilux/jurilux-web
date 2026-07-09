@@ -1697,7 +1697,8 @@ const FICHIER_LOGO = { name: 'logo.png', mimeType: 'image/png', buffer: PNG_1PX 
 const rediger = async (page, instruction) => {
   await menuItem(page, 'Rédiger');
   await page.locator('.draft-setup textarea').fill(instruction);
-  await page.locator('.draft-setup').getByRole('button', { name: 'Rédiger', exact: true }).click();
+  // par classe : le libellé devient « Rédiger un nouveau document » dès qu'un brouillon existe
+  await page.locator('.draft-setup button.send').click();
   await voir(page, 'Document rédigé (test).');
 };
 

@@ -1420,6 +1420,125 @@ await journey(browser, 'W17-01-deconnexion-desktop', async (page) => {
   await voir(page, 'accès réservé');                          // retour au mur (site privé)
 });
 
+// ═══════════ V18. RÉDACTION V2 — modèles, brouillons, versions, raffinement ═══════════
+
+await journey(browser, 'W18-01-generer-depuis-modele', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup select').first().selectOption('i:mise-en-demeure');
+  await voir(page, 'Courrier formel exigeant');                 // description du modèle
+  await page.getByPlaceholder('SARL Exemple, 12 rue X, Luxembourg').fill('SARL Test');
+  await page.locator('.draft-setup textarea').fill('Mise en demeure pour loyers impayés');
+  await page.locator('.draft-style select').first().selectOption('ferme');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test). [squelette suivi]'); // squelette transmis
+  await voir(page, 'Fondements · 1 document');
+});
+
+await journey(browser, 'W18-02-raffiner-et-versions', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('Avis sur le préavis de licenciement');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+  await page.getByPlaceholder(/Raffiner :/).fill('ajoute un paragraphe sur la prescription');
+  await page.getByRole('button', { name: 'Raffiner' }).click();
+  await voir(page, '[Révisé : ajoute un paragraphe');            // contenu révisé
+  await voir(page, 'Historique — 2 versions');
+});
+
+await journey(browser, 'W18-03-brouillon-persistant-reouverture', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('Note interne clause de non-concurrence');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+  // renommer puis fermer/rouvrir : le brouillon persiste
+  await page.locator('.draft-title').fill('Note NC — dossier X');
+  await page.locator('.draft-title').blur();
+  await page.waitForTimeout(400);
+  await page.locator('.modal .close').click();
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-open').selectOption({ index: 1 }); // brouillon le plus récent
+  await voir(page, 'Document rédigé (test).');
+  const titre = await page.locator('.draft-title').inputValue();  // le titre vit dans un <input>
+  if (titre !== 'Note NC — dossier X') throw new Error('titre non persisté : ' + titre);
+});
+
+await journey(browser, 'W18-04-restaurer-version', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.setViewportSize({ width: 1280, height: 1600 });   // desktop haut : l'historique tient à l'écran
+  await page.locator('.draft-setup textarea').fill('Conclusions licenciement abusif');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+  await page.getByPlaceholder(/Raffiner :/).fill('raccourcis la discussion');
+  await page.getByRole('button', { name: 'Raffiner' }).click();
+  await voir(page, 'Historique — 2 versions');
+  await page.locator('.draft-versions summary').click();      // ouvrir l'historique
+  await page.locator('.draft-versions').getByRole('button', { name: /restaurer/ }).first().click();
+  await voir(page, 'Historique — 3 versions');                  // restauration = nouvelle version
+});
+
+await journey(browser, 'W18-05-enregistrer-comme-modele', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('Trame de courrier type');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+  await page.getByRole('button', { name: 'Enregistrer comme modèle' }).click();
+  await page.locator('.draft-tplform input').fill('Ma trame courrier');
+  await page.locator('.draft-tplform').getByRole('button', { name: 'Enregistrer' }).click();
+  await page.waitForTimeout(500);
+  // le modèle personnel apparaît dans le sélecteur et peut être supprimé
+  const sel = page.locator('.draft-setup select').first();
+  await sel.selectOption({ label: 'Ma trame courrier' });
+  await page.getByRole('button', { name: 'Supprimer ce modèle' }).click();
+  await page.waitForTimeout(400);
+  await absent(page, 'Ma trame courrier');
+});
+
+await journey(browser, 'W18-06-modele-cabinet-partage', async (page, bag) => {
+  // l'owner du cabinet Dupont publie un modèle partagé…
+  await entrer(page, 'dupont.owner@demo.lu');
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('Trame partagée du cabinet');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+  await page.getByRole('button', { name: 'Enregistrer comme modèle' }).click();
+  await page.locator('.draft-tplform input').fill('Trame Dupont partagée');
+  await page.locator('.draft-tplform select').selectOption({ index: 1 });   // Cabinet : Étude Dupont
+  await page.locator('.draft-tplform').getByRole('button', { name: 'Enregistrer' }).click();
+  await page.waitForTimeout(500);
+  // … et l'associé du même cabinet le voit dans son propre sélecteur
+  const a = await acteur(browser, 'dupont.associe@demo.lu');
+  try {
+    await menuItem(a.p, 'Rédiger');
+    await a.p.locator('.draft-setup select').first()
+      .selectOption({ label: 'Trame Dupont partagée · cabinet' });
+  } finally { await a.ctx.close(); }
+});
+
+await journey(browser, 'W18-07-refus-gracieux', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('recette de cuisine luxembourgeoise');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Aucun fondement');                           // refus, pas de document
+  await absent(page, 'Historique —');
+});
+
+await journey(browser, 'W18-08-suppression-brouillon', async (page) => {
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('Document à jeter');
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
+  await voir(page, 'Document rédigé (test).');
+  await page.getByRole('button', { name: 'Supprimer', exact: true }).click(); // confirm() auto-accepté
+  await page.waitForTimeout(500);
+  await voir(page, 'Le document apparaîtra ici');                // retour à l'état vide
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

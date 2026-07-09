@@ -779,7 +779,7 @@ export default function App({ initialInsight = false }: { initialInsight?: boole
           )}
           <div className="side-links">
             {/* Déconnexion accessible AUSSI sur desktop (n'existait que dans le tiroir mobile ☰). */}
-            {user && <button className="side-legal linklike" onClick={doLogout}>Se déconnecter</button>}
+            {user && <button className="side-logout-link linklike" onClick={doLogout}>Se déconnecter</button>}
             <button className="side-legal linklike" onClick={() => setLegalOpen(true)}>Mentions &amp; confidentialité</button>
           </div>
         </div>

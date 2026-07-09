@@ -170,4 +170,13 @@ export const INTENTIONS = {
   'W16-14-profil-en-echec-message': { intention: "Cliquer un avocat quand l'API profil est en panne", attendu: "Un message d'erreur visible (jamais d'échec silencieux)" },
   'W16-15-cabinet-en-echec-message': { intention: "Ouvrir une fiche cabinet quand l'API est en panne", attendu: "Un message d'erreur visible (jamais d'échec silencieux)" },
   'W17-01-deconnexion-desktop': { intention: "Se déconnecter depuis un écran d'ordinateur", attendu: "Bouton visible dans la barre latérale sans ouvrir de menu ; retour au mur de connexion" },
+  // ── V18. Rédaction v2 ──
+  'W18-01-generer-depuis-modele': { intention: "Générer une mise en demeure depuis un modèle avec variables et ton", attendu: "Document au squelette du modèle, fondements cités" },
+  'W18-02-raffiner-et-versions': { intention: "Raffiner un document par instruction", attendu: "Contenu révisé et historique à 2 versions" },
+  'W18-03-brouillon-persistant-reouverture': { intention: "Renommer, fermer puis rouvrir un brouillon", attendu: "Le brouillon renommé se rouvre avec son contenu" },
+  'W18-04-restaurer-version': { intention: "Restaurer une version antérieure", attendu: "La restauration crée une 3e version (rien n'est perdu)" },
+  'W18-05-enregistrer-comme-modele': { intention: "Capitaliser un document en modèle personnel", attendu: "Le modèle apparaît dans le sélecteur puis se supprime" },
+  'W18-06-modele-cabinet-partage': { intention: "Partager un modèle au cabinet", attendu: "Un associé du cabinet voit le modèle partagé" },
+  'W18-07-refus-gracieux': { intention: "Demander un document hors droit luxembourgeois", attendu: "Refus gracieux, aucun brouillon créé" },
+  'W18-08-suppression-brouillon': { intention: "Supprimer un brouillon", attendu: "Retour à l'état vide de l'atelier" },
 };

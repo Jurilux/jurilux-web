@@ -1017,3 +1017,7 @@ a.nav-item { display: block; text-decoration: none; }
 .draft-versions summary { cursor: pointer; font-size: .88rem; }
 .draft-versions ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex;
   flex-direction: column; gap: 5px; font-size: .85rem; }
+
+/* Déconnexion (pied de barre desktop) — même allure que le lien légal, classe distincte */
+.side-logout-link { color: inherit; }
+.side-logout-link:hover { color: var(--red, #c0392b); }

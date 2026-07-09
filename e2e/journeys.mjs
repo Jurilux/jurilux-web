@@ -1757,6 +1757,42 @@ await journey(browser, 'W23-03-en-tete-persistant', async (page) => {
   await voir(page, 'Signature…');
 });
 
+// ═══════════ W24. THÈME SOMBRE + EXPORT WORD ═══════════
+await journey(browser, 'W24-01-theme-sombre-persistant', async (page) => {
+  // Bascule dans le menu de compte → data-theme=dark + fond sombre ; persiste au rechargement.
+  await entrer(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('aside .side-acct-btn').click();
+  await page.getByRole('button', { name: /Thème sombre/ }).click();
+  const theme = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (theme !== 'dark') throw new Error('data-theme attendu "dark", reçu : ' + theme);
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  if (!/rgb\((1?\d|2[0-9]),/.test(bg)) throw new Error('fond toujours clair : ' + bg);
+  await page.reload({ waitUntil: 'networkidle' });               // persiste au rechargement
+  const apres = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (apres !== 'dark') throw new Error('thème non persisté après reload : ' + apres);
+  // et retour au clair
+  await page.locator('aside .side-acct-btn').click();
+  await page.getByRole('button', { name: /Thème clair/ }).click();
+  const clair = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (clair !== 'light') throw new Error('retour clair attendu, reçu : ' + clair);
+});
+
+await journey(browser, 'W24-02-export-word', async (page) => {
+  // « Word » télécharge un .doc (HTML natif Word) au nom du brouillon.
+  await entrer(page);
+  await menuItem(page, 'Rédiger');
+  await page.locator('.draft-setup textarea').fill('Mise en demeure pour test export');
+  await page.locator('.draft-setup button.send').click();
+  await voir(page, 'Document rédigé (test).');
+  const [dl] = await Promise.all([
+    page.waitForEvent('download', { timeout: 8000 }),
+    page.getByRole('button', { name: 'Word', exact: true }).first().click(),
+  ]);
+  const nom = dl.suggestedFilename();
+  if (!nom.endsWith('.doc')) throw new Error('téléchargement attendu .doc, reçu : ' + nom);
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

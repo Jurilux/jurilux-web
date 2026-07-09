@@ -200,4 +200,7 @@ export const INTENTIONS = {
   'W23-01-logo-demande-puis-fourni': { intention: "Habiller mes documents du logo du cabinet", attendu: "Le logo est demandé s'il manque ; une fois fourni, l'en-tête (logo + cabinet + date) habille le document" },
   'W23-02-signature-et-visionneuse': { intention: "Signer et prévisualiser le document final", attendu: "La signature chargée s'affiche ; l'aperçu montre la feuille finale (en-tête + texte + signature)" },
   'W23-03-en-tete-persistant': { intention: "Retrouver mon papier à en-tête au prochain document", attendu: "L'en-tête habille d'office les nouveaux documents, logo et signature restent remplaçables" },
+  // ── W24. Thème sombre + export Word ──
+  'W24-01-theme-sombre-persistant': { intention: "Travailler en thème sombre", attendu: "La bascule du menu de compte passe l'app en sombre, persiste au rechargement, et revient au clair" },
+  'W24-02-export-word': { intention: "Ouvrir mon document dans Word", attendu: "« Word » télécharge un .doc au nom du brouillon (papier à en-tête inclus)" },
 };

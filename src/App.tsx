@@ -807,6 +807,15 @@ export default function App({ initialInsight = false, initialRedaction = false }
       : <button className={cls} onClick={() => { it.run?.(); onNavigate?.(); }}>{inner}</button>;
   };
 
+  // Thème sombre : bascule explicite (persistée), appliquée sur <html data-theme>.
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
+  const basculerTheme = () => {
+    const t = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+    localStorage.setItem('theme', t);
+    setTheme(t);
+  };
+
   // Menu de compte unifié : avatar → un seul menu (profil, plan/quota, mot de passe, données,
   // déconnexion). Rendu identique dans la barre latérale et le tiroir.
   const AccountMenu = ({ onNavigate }: { onNavigate?: () => void }) => {
@@ -822,6 +831,8 @@ export default function App({ initialInsight = false, initialRedaction = false }
           <div className="acct-quota muted">{account.quota.remaining} / {account.quota.limit} questions restantes ce mois</div>}
         <button className="acct-link" onClick={() => { openAccount(); onNavigate?.(); }}>⚙️ Mon compte <span className="muted">— clés, prompts, données</span></button>
         <button className="acct-link" onClick={() => { openPassword(); onNavigate?.(); }}>🔑 Changer de mot de passe</button>
+        <button className="acct-link" onClick={basculerTheme}>
+          🌓 {theme === 'dark' ? 'Thème clair' : 'Thème sombre'}</button>
         <button className="acct-link" onClick={() => { openLegal(); onNavigate?.(); }}>📄 Mentions &amp; confidentialité</button>
         <button className="acct-link acct-logout" onClick={doLogout}>Se déconnecter</button>
       </div>

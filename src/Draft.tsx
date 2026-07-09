@@ -201,12 +201,10 @@ export function DraftEmbedded() {
     catch { /* silencieux */ }
   };
 
-  const imprimer = () => {
-    if (!draft) return;
-    const w = window.open('', '_blank');
-    if (!w) return;
-    // Papier à en-tête à l'impression : logo + cabinet + date, typographie de courrier
-    // (Palatino/Georgia), bloc de signature — le PDF ressemble à un vrai courrier de cabinet.
+  // Page HTML « courrier de cabinet » (papier à en-tête + signature, typographie de lettre) —
+  // partagée par l'impression PDF et l'export Word (.doc = HTML que Word ouvre nativement).
+  const pageHtml = () => {
+    if (!draft) return '';
     const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const entete = (brand?.logo || brand?.cabinet) ? `
       <header class="lh">
@@ -219,7 +217,7 @@ export function DraftEmbedded() {
     const sign = brand?.signature ? `
       <div class="sign"><img src="${brand.signature}" alt="Signature">
         ${brand?.cabinet ? `<div class="sign-name">${brand.cabinet.replace(/</g, '&lt;')}</div>` : ''}</div>` : '';
-    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
+    return `<!doctype html><html lang="fr"><head><meta charset="utf-8">
       <title>${draft.title.replace(/</g, '&lt;')}</title>
       <style>
       body{font:14px/1.7 "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
@@ -239,10 +237,31 @@ export function DraftEmbedded() {
       ${entete}
       ${renderAnswer(draft.content, draft.citations || [])}
       ${sign}
-      <div class="foot">Brouillon assisté Jurilux — à relire par un avocat.</div></body></html>`);
+      <div class="foot">Brouillon assisté Jurilux — à relire par un avocat.</div></body></html>`;
+  };
+
+  const imprimer = () => {
+    if (!draft) return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(pageHtml());
     w.document.close();
     w.focus();
     w.print();
+  };
+
+  // Export Word : Word ouvre nativement un fichier .doc au contenu HTML (papier à en-tête,
+  // images incluses en data-URL). Zéro dépendance — premier pas vers l'intégration Office.
+  const exporterWord = () => {
+    if (!draft) return;
+    const blob = new Blob(['﻿' + pageHtml()], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(draft.title || 'document').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'document'}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
   };
 
   const enregistrerModele = async () => {
@@ -453,6 +472,7 @@ export function DraftEmbedded() {
                   <button className="ghost" onClick={() => setViewerOpen(true)}>👁 Aperçu</button>
                   <button className="ghost" onClick={copier}>{copied ? '✓ Copié' : 'Copier'}</button>
                   <button className="ghost" onClick={imprimer}>Imprimer / PDF</button>
+                  <button className="ghost" onClick={exporterWord} title="Télécharger en .doc (papier à en-tête inclus)">Word</button>
                   {brand?.logo && (
                     <label className="ghost lh-file" title="Remplacer le logo du cabinet">Logo…
                       <input type="file" accept="image/*" onChange={chargerImage('logo')} hidden />
@@ -512,6 +532,7 @@ export function DraftEmbedded() {
         <div className="lh-viewer-overlay" onClick={() => setViewerOpen(false)}>
           <div className="lh-viewer-bar" onClick={(e) => e.stopPropagation()}>
             <button className="ghost" onClick={imprimer}>Imprimer / PDF</button>
+            <button className="ghost" onClick={exporterWord}>Word</button>
             <button className="ghost" onClick={() => setViewerOpen(false)}>✕ Fermer</button>
           </div>
           <div className="lh-viewer-sheet" onClick={(e) => e.stopPropagation()}>

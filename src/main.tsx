@@ -10,6 +10,10 @@ const AdminApp = lazy(() => import('./Admin'));
 const VaultApp = lazy(() => import('./Vault'));
 const SharedView = lazy(() => import('./Shared').then((m) => ({ default: m.SharedView })));
 
+// Thème sombre : appliqué AVANT le premier rendu (pas de flash), choix persisté.
+const themeStocke = localStorage.getItem('theme');
+if (themeStocke === 'dark') document.documentElement.dataset.theme = 'dark';
+
 // Routage minimal sans dépendance : /admin → backoffice, /insight → profiling avocats,
 // /vault → documents privés, /redaction → atelier de rédaction, /r/<id> → réponse partagée.
 // Caddy sert index.html en fallback.

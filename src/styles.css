@@ -19,6 +19,25 @@
   --shadow: 0 1px 2px rgba(20,20,18,.03), 0 10px 26px -20px rgba(20,20,18,.20);
 }
 
+/* --- Thème sombre (bascule dans le menu de compte, persistée) : mêmes tokens, encre de nuit.
+   La « feuille » de la visionneuse reste blanche à dessein — c'est du papier. --- */
+:root[data-theme="dark"] {
+  --bg: #14171d; --card: #1b2027; --card-2: #181d24;
+  --frame: #10131a; --surface: #1b2027; --paper: #14171d;
+  --chrome: #171b22; --chrome-line: #262c36;
+  --text: #e8e6df; --muted: #a7adb6; --muted-2: #7b828d;
+  --border: #2b323d; --border-2: #232933;
+  --primary: #8fb4dd; --primary-700: #b3cdea; --primary-soft: #223349;
+  --accent: #3d6ea6;
+  --ink: #e8e6df; --on-dark: #f3f2ec;
+  --amber: #d9a441; --amber-soft: #3a3222;
+  --green: #58b389; --green-soft: #21332a;
+  --ok: #58b389; --ko: #d08070; --warn: #d9a441;
+  --shadow: 0 1px 2px rgba(0,0,0,.25), 0 10px 26px -20px rgba(0,0,0,.6);
+}
+:root[data-theme="dark"] .rel-adversaire { border-color: #5c3a3a; }
+:root[data-theme="dark"] .rel-co-conseil { border-color: #2e4a3a; }
+
 * { box-sizing: border-box; margin: 0; }
 body {
   font-family: var(--sans); background: var(--bg); color: var(--text);

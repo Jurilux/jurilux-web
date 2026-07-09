@@ -14,31 +14,52 @@ on:
   workflow_dispatch:
 
 jobs:
+  # jurilux-api est PRIVÉ : le github.token du job ne peut pas le lire (« Repository not
+  # found »). Sans secret CI_PAT (PAT fine-grained lecture sur jurilux-api), on SKIPPE le
+  # job explicitement plutôt que d'échouer en rouge pour une raison de droits — les parcours
+  # restent exécutables en local (voir e2e/README.md).
   e2e:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout front
         uses: actions/checkout@v4
 
+      - name: Vérifier l'accès au backend de démo (CI_PAT)
+        id: acces
+        env:
+          CI_PAT: ${{ secrets.CI_PAT }}
+        run: |
+          if [ -n "$CI_PAT" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::E2E sauté : jurilux-api est privé et le secret CI_PAT n'est pas configuré (Settings → Secrets → CI_PAT, PAT fine-grained lecture sur jurilux-api)."
+          fi
+
       - name: Checkout backend de démo (jurilux-api)
+        if: steps.acces.outputs.ok == 'true'
         uses: actions/checkout@v4
         with:
           repository: Jurilux/jurilux-api
           ref: main
           path: .api
-          token: ${{ secrets.CI_PAT || github.token }}
+          token: ${{ secrets.CI_PAT }}
 
       - uses: actions/setup-node@v4
+        if: steps.acces.outputs.ok == 'true'
         with:
           node-version: 20
       - uses: actions/setup-python@v5
+        if: steps.acces.outputs.ok == 'true'
         with:
           python-version: '3.11'
 
       - name: Dépendances backend
+        if: steps.acces.outputs.ok == 'true'
         run: pip install -r .api/requirements.txt
 
       - name: Démarrer le backend de démo (stubé)
+        if: steps.acces.outputs.ok == 'true'
         working-directory: .api
         run: |
           python -m functional.e2e_server > /tmp/e2e_server.log 2>&1 &
@@ -47,23 +68,27 @@ jobs:
           echo "SHARE_ID=$SID" >> "$GITHUB_ENV"
 
       - name: Dépendances front
+        if: steps.acces.outputs.ok == 'true'
         run: npm ci
 
       - name: Playwright + Chromium
+        if: steps.acces.outputs.ok == 'true'
         run: |
           npm i --no-save playwright
           npx playwright install --with-deps chromium
 
       - name: Démarrer le front (proxy Vite → backend de démo)
+        if: steps.acces.outputs.ok == 'true'
         run: |
           API_TARGET=http://127.0.0.1:8088 npx vite --host 127.0.0.1 --port 5173 > /tmp/vite.log 2>&1 &
           for i in $(seq 1 40); do curl -sf http://127.0.0.1:5173/ && break; sleep 1; done
 
       - name: Jouer les parcours (échec = build cassé)
+        if: steps.acces.outputs.ok == 'true'
         run: FRONT_URL=http://127.0.0.1:5173 node e2e/journeys.mjs
 
       - name: Publier captures + rapport
-        if: always()
+        if: always() && steps.acces.outputs.ok == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-artifacts

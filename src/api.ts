@@ -286,19 +286,8 @@ export interface DossierItem {
   status: string | null; created_at: string; added_by: string | null;
 }
 
-async function wsGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { ...authHeaders() } });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Erreur (HTTP ${res.status})`);
-  return (await res.json()) as T;
-}
-async function wsSend<T>(path: string, method: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method, headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Erreur (HTTP ${res.status})`);
-  return (await res.json().catch(() => ({}))) as T;
-}
+const wsGet = <T,>(path: string) => request<T>(path);
+const wsSend = <T,>(path: string, method: string, body?: unknown) => request<T>(path, method, body);
 
 export const listWorkspaces = () => wsGet<{ items: Workspace[] }>('/api/workspaces').then((d) => d.items);
 export const createWorkspace = (name: string) => wsSend<Workspace>('/api/workspaces', 'POST', { name });
@@ -355,26 +344,27 @@ export class HttpError extends Error {
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-async function adminGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { ...authHeaders() } });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
-  }
-  return (await res.json()) as T;
-}
-
-async function adminSend(path: string, method: string, body?: unknown): Promise<void> {
+// Cœur commun des appels JSON authentifiés (Bearer) : en-têtes, corps, erreurs typées
+// HttpError. Les wrappers historiques (wsGet/wsSend/adminGet/adminSend) sont des alias —
+// même signature, même comportement, un seul endroit pour la gestion d'erreur.
+async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: {
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...authHeaders(),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
   }
+  return (await res.json().catch(() => ({}))) as T;
 }
+
+const adminGet = <T,>(path: string) => request<T>(path);
+const adminSend = (path: string, method: string, body?: unknown) => request<void>(path, method, body);
 
 export interface AdminOverview {
   metrics: {
@@ -457,24 +447,9 @@ export interface AdminTests {
   executable: boolean;
 }
 export const adminTests = () => adminGet<AdminTests>('/api/admin/tests');
-export async function adminTestsRun(): Promise<void> {
-  const res = await fetch('/api/admin/tests/run', { method: 'POST', headers: { ...authHeaders() } });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
-  }
-}
-export async function adminTestsImport(rapport: unknown): Promise<{ total: number; verts: number }> {
-  const res = await fetch('/api/admin/tests/rapport', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(rapport),
-  });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
-  }
-  return (await res.json()) as { total: number; verts: number };
-}
+export const adminTestsRun = () => request<void>('/api/admin/tests/run', 'POST');
+export const adminTestsImport = (rapport: unknown) =>
+  request<{ total: number; verts: number }>('/api/admin/tests/rapport', 'POST', rapport);
 
 export const adminOverview = () => adminGet<AdminOverview>('/api/admin/overview');
 export const adminUsers = () => adminGet<{ items: AdminUser[] }>('/api/admin/users').then((d) => d.items);
@@ -495,18 +470,8 @@ export interface ProbeHit {
   chunk_id: string; doc_id: string; source_type: string | null;
   title: string | null; year: number | null; juridiction_key: string | null; snippet: string;
 }
-export async function adminProbe(q: string, topK = 12): Promise<{ count: number; hits: ProbeHit[] }> {
-  const res = await fetch('/api/admin/probe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ q, topK }),
-  });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
-  }
-  return (await res.json()) as { count: number; hits: ProbeHit[] };
-}
+export const adminProbe = (q: string, topK = 12) =>
+  request<{ count: number; hits: ProbeHit[] }>('/api/admin/probe', 'POST', { q, topK });
 export const adminSetPlan = (id: number, plan: string) =>
   adminSend(`/api/admin/users/${id}/plan`, 'POST', { plan });
 export const adminSetAdmin = (id: number, is_admin: boolean) =>
@@ -613,16 +578,8 @@ export const insightFirm = (name: string) =>
 export interface InsightArticle { article: string; decisions: number; }
 export const insightArticles = (limit = 15) =>
   adminGet<{ items: InsightArticle[] }>(`/api/insight/articles?limit=${limit}`).then((d) => d.items);
-export async function insightRgpdRequest(name: string, kind: string, email?: string, message?: string): Promise<void> {
-  const res = await fetch('/api/insight/rgpd-request', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, kind, email: email || null, message: message || null }),
-  });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new HttpError(res.status, d.detail || `Erreur (HTTP ${res.status})`);
-  }
-}
+export const insightRgpdRequest = (name: string, kind: string, email?: string, message?: string) =>
+  request<void>('/api/insight/rgpd-request', 'POST', { name, kind, email: email || null, message: message || null });
 export const insightExportUrl = (q = '', sort = 'cases', matter = '', limit = 200) =>
   '/api/insight/export/lawyers.csv?limit=' + limit + '&sort=' + sort
   + (q ? `&q=${encodeURIComponent(q)}` : '') + (matter ? `&matter=${encodeURIComponent(matter)}` : '');

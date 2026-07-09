@@ -180,4 +180,6 @@ export const INTENTIONS = {
   'W18-07-refus-gracieux': { intention: "Demander un document hors droit luxembourgeois", attendu: "Refus gracieux, aucun brouillon créé" },
   'W18-08-suppression-brouillon': { intention: "Supprimer un brouillon", attendu: "Retour à l'état vide de l'atelier" },
   'W18-09-exemples-et-route': { intention: "Découvrir la rédaction par son URL et un exemple", attendu: "Vue pleine page, exemple qui pré-remplit le formulaire, document généré" },
+  // ── W19. Carte thématique sur TOUTES les réponses (y compris de suivi) ──
+  'W19-01-carte-sur-reponse-suivi': { intention: "Approfondir via une question de suivi", attendu: "La réponse de suivi est aussi présentée en carte thématique, pas en texte brut" },
 };

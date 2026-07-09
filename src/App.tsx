@@ -318,23 +318,24 @@ function RecoveryActions({ m, actions }: { m: Message; actions: MsgActions }) {
   );
 }
 
-function AssistantMessage({ m, actions, first }: { m: Message; actions: MsgActions; first?: boolean }) {
-  // Carte thématique : la PREMIÈRE réponse aboutie est présentée en constellation de thèmes
-  // (si le markdown se découpe en ≥ 2 sections) plutôt qu'en long texte. Bascule Carte/Texte.
+function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
+  // Carte thématique : TOUTE réponse aboutie (1re OU question connexe/de suivi) est présentée
+  // en constellation de thèmes si le markdown se découpe en ≥ 2 sections, plutôt qu'en long
+  // texte. parseThemes renvoie null en deçà → repli texte automatique. Bascule Carte/Texte.
   const themed = useMemo(
-    () => (first && !m.streaming && !m.error && !m.refused && m.content) ? parseThemes(m.content, 1) : null,
-    [first, m.streaming, m.error, m.refused, m.content]);
-  // Pendant le streaming de la 1re réponse : constellation PROGRESSIVE (les bulles se posent
-  // au fil des sections, focus sur celle en cours) — dès 1 thème détecté dans le flux.
+    () => (!m.streaming && !m.error && !m.refused && m.content) ? parseThemes(m.content, 1) : null,
+    [m.streaming, m.error, m.refused, m.content]);
+  // Pendant le streaming : constellation PROGRESSIVE (les bulles se posent au fil des sections,
+  // focus sur celle en cours) — dès 1 thème détecté dans le flux.
   const liveCache = useRef<{ nl: number; res: ReturnType<typeof parseThemes> }>({ nl: -1, res: null });
   const themedLive = useMemo(() => {
-    if (!(first && m.streaming && m.content)) { liveCache.current = { nl: -1, res: null }; return null; }
+    if (!(m.streaming && m.content)) { liveCache.current = { nl: -1, res: null }; return null; }
     // Reparse seulement quand une LIGNE s'est terminée (un titre ne peut naître qu'à la ligne) :
     // évite un parse complet à chaque token du flux.
     let nl = 0; for (let i = 0; i < m.content.length; i++) if (m.content.charCodeAt(i) === 10) nl++;
     if (nl !== liveCache.current.nl) liveCache.current = { nl, res: parseThemes(m.content, 1, false) };
     return liveCache.current.res;
-  }, [first, m.streaming, m.content]);
+  }, [m.streaming, m.content]);
   const [view, setView] = useState<'carte' | 'texte'>('carte');
   if (m.error) {
     return (
@@ -866,7 +867,6 @@ export default function App({ initialInsight = false, initialRedaction = false }
                       <div key={m.id} className="bubble user"><p>{m.content}</p></div>
                     ) : (
                       <AssistantMessage key={m.id} m={m}
-                        first={m.id === messages.find((x) => x.role === 'assistant')?.id}
                         actions={{
                         onSuggestion: (s) => { setInput(s); inputRef.current?.focus(); },
                         onAsk: (qq) => submit(qq),

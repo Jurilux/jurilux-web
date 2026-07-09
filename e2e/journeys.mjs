@@ -298,11 +298,11 @@ await journey(browser, 'G05-rediger', async (page) => {
   await accueil(page);
   await login(page, 'pro@demo.lu');
   await menuItem(page, 'Rédiger');
-  // La rédaction est une fenêtre modale (pas un tiroir) : viser .modal, pas le champ d'accueil.
-  const zone = page.locator('.modal textarea').first();
+  // La rédaction est une vue interne pleine page (plus un modal) : viser .draft-setup.
+  const zone = page.locator('.draft-setup textarea').first();
   await zone.waitFor({ state: 'visible', timeout: 8000 });
   await zone.fill('Rédige une mise en demeure pour loyers impayés.');
-  await page.locator('.modal').getByRole('button', { name: /Rédiger|Générer/ }).first().click();
+  await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
   await voir(page, 'Document rédigé', { timeout: 12000 });
 });
 
@@ -1557,6 +1557,21 @@ await journey(browser, 'W18-09-exemples-et-route', async (page) => {
   // il ne reste qu'à lancer
   await page.getByRole('button', { name: 'Rédiger', exact: true }).click();
   await voir(page, 'Document rédigé (test). [squelette suivi]');
+});
+
+// ═══════════════ W19. CARTE THÉMATIQUE SUR LES RÉPONSES DE SUIVI ═══════════════
+// Régression : les réponses aux questions connexes/de suivi doivent recevoir la MÊME
+// carte thématique (constellation) que la 1re réponse, et non un simple texte brut.
+await journey(browser, 'W19-01-carte-sur-reponse-suivi', async (page) => {
+  await entrer(page);
+  await ask(page, 'Licenciement avec effet immédiat ?');
+  // 1re réponse → carte thématique
+  await page.locator('.tmap').first().waitFor({ timeout: 15000 });
+  // approfondir via une question de suivi
+  await page.locator('.followup-btn').first().waitFor({ timeout: 8000 });
+  await page.locator('.followup-btn').first().click();
+  // la réponse de SUIVI est elle aussi présentée en carte (≥ 2 constellations au total)
+  await page.locator('.tmap').nth(1).waitFor({ timeout: 15000 });
 });
 
 await browser.close();

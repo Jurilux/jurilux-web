@@ -671,7 +671,8 @@ export default function App({ initialInsight = false, initialRedaction = false }
     (typeof filters.year_min === 'number' ? 1 : 0) +
     (typeof filters.year_max === 'number' ? 1 : 0) +
     (filters.juridiction_key?.trim() ? 1 : 0) +
-    (filters.source_type ? 1 : 0);
+    (filters.source_type ? 1 : 0) +
+    (filters.country ? 1 : 0);
 
   async function submit(q: string, overrideFilters?: SearchFilters) {
     const question = q.trim();
@@ -749,6 +750,18 @@ export default function App({ initialInsight = false, initialRedaction = false }
         <input type="text" placeholder="ex : csj_ch04" value={filters.juridiction_key ?? ''}
           onChange={(e) => setFilters({ ...filters, juridiction_key: e.target.value || undefined })} />
       </label>
+      {/* Multi-juridiction : le filtre Pays n'apparaît que si le corpus couvre > 1 pays. */}
+      {corpusInfo?.by_country && Object.keys(corpusInfo.by_country).length > 1 && (
+        <label>Pays
+          <select value={filters.country ?? ''}
+            onChange={(e) => setFilters({ ...filters, country: e.target.value || undefined })}>
+            <option value="">Tous</option>
+            {Object.keys(corpusInfo.by_country).sort().map((c) => (
+              <option key={c} value={c}>{c === 'LU' ? 'Luxembourg' : c === 'BE' ? 'Belgique' : c === 'FR' ? 'France' : c}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="pedago-filter" title="Réponse didactique : principe → texte → jurisprudence">
         <input type="checkbox" checked={pedagogical} onChange={(e) => setPedagogical(e.target.checked)} />
         Mode pédagogique <span className="muted">(étudiant)</span>

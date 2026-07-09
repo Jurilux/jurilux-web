@@ -7,6 +7,7 @@ export interface SearchFilters {
   year_max?: number;
   juridiction_key?: string;
   source_type?: string;   // jurisprudence | law | projet_loi
+  country?: string;       // LU | BE | FR — multi-juridiction (optionnel)
 }
 
 export interface Citation {
@@ -156,6 +157,7 @@ export interface Corpus {
   updated: string | null;
   chunks: number | null;
   latest_year: number | null;
+  by_country?: Record<string, number> | null;  // multi-juridiction (LU/BE/FR) si présent
 }
 
 export async function corpus(): Promise<Corpus | null> {

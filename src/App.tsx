@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy, FormEvent } from 'react';
-import { ask, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
+import { ask, askDeep, askStream, health, corpus, pdfHref, login, register, logout, changePassword, sendFeedback, createShare, getHistory, me, clearSession,
   getStoredEmail, listAlerts, createAlert, oidcEnabled, oidcLogin, captureOidcToken,
   AskResponse, Citation, Corpus, Feedback, HistoryItem, Me, SearchFilters } from './api';
 import { lawTitle, jurisDate, jurisCourt, jurisRef } from './juridictions';
@@ -30,6 +30,7 @@ interface Message {
   suggested_question?: string | null;
   follow_ups?: string[] | null;    // parcours guidé : questions de suivi logiques ordonnées
   streaming?: boolean;             // réponse en cours de streaming
+  deep?: boolean;                  // recherche approfondie (plan + axes + mémo)
   error?: string;
 }
 
@@ -360,7 +361,9 @@ function AssistantMessage({ m, actions }: { m: Message; actions: MsgActions }) {
             <span className="stream-cursor" aria-hidden="true">▌</span>
           </>
         ) : (
-          <p className="typing">Recherche dans les sources…</p>
+          <p className="typing">{m.deep
+            ? 'Recherche approfondie — plan, axes, synthèse… (peut prendre ~1 min)'
+            : 'Recherche dans les sources…'}</p>
         )}
       </div>
     );
@@ -674,7 +677,7 @@ export default function App({ initialInsight = false, initialRedaction = false }
     (filters.source_type ? 1 : 0) +
     (filters.country ? 1 : 0);
 
-  async function submit(q: string, overrideFilters?: SearchFilters) {
+  async function submit(q: string, overrideFilters?: SearchFilters, deep = false) {
     const question = q.trim();
     if (!question || loading) return;
     const usedFilters = overrideFilters ?? filters;
@@ -687,7 +690,7 @@ export default function App({ initialInsight = false, initialRedaction = false }
     setInput('');
     setLoading(true);
     const aid = `a${Date.now()}`;
-    setMessages((prev) => [...prev, { id: aid, role: 'assistant', content: '', question, streaming: true }]);
+    setMessages((prev) => [...prev, { id: aid, role: 'assistant', content: '', question, streaming: true, deep }]);
 
     // Dédup : doc_id pour la jurisprudence, titre parsé pour les lois.
     const dedup = (cites: Citation[]) => {
@@ -709,9 +712,14 @@ export default function App({ initialInsight = false, initialRedaction = false }
     } : m));
 
     try {
-      await askStream(question, 20, usedFilters, 0, pedagogical,
-        (delta) => setMessages((prev) => prev.map((m) => m.id === aid ? { ...m, content: m.content + delta } : m)),
-        finalize, history);
+      if (deep) {
+        // Recherche APPROFONDIE : non-streamée (plan + recherches par axe + synthèse côté serveur).
+        finalize(await askDeep(question, 20, usedFilters, pedagogical, history));
+      } else {
+        await askStream(question, 20, usedFilters, 0, pedagogical,
+          (delta) => setMessages((prev) => prev.map((m) => m.id === aid ? { ...m, content: m.content + delta } : m)),
+          finalize, history);
+      }
     } catch {
       // repli non-streamé si le flux échoue
       try {
@@ -948,6 +956,9 @@ export default function App({ initialInsight = false, initialRedaction = false }
                   <div className="sh-actions">
                     <button className={`ghost filter-toggle ${activeFilters > 0 ? 'active' : ''}`} title="Filtres"
                       onClick={() => setShowFilters(!showFilters)}>⚙{activeFilters > 0 ? ` ${activeFilters}` : ''}</button>
+                    <button className="ghost deep-toggle" disabled={!input.trim() || loading}
+                      title="Recherche approfondie : la question est découpée en axes, chaque axe interroge le corpus, puis un mémo structuré sourcé est produit (~1 min)"
+                      onClick={() => submit(input, undefined, true)}>🔬 Approfondie</button>
                     <button className="go" disabled={!input.trim() || loading} onClick={() => submit(input)}>Rechercher</button>
                   </div>
                 </div>
@@ -956,7 +967,7 @@ export default function App({ initialInsight = false, initialRedaction = false }
               {user && messages.length === 0 && (
                 <Suspense fallback={null}>
                   <TodayEmbedded account={account} corpusInfo={corpusInfo} alertUnseen={alertUnseen}
-                    onOpenAlerts={openAlerts}
+                    onOpenAlerts={openAlerts} onAsk={(q) => submit(q)}
                     onResume={(q) => { setInput(q); setTimeout(() => inputRef.current?.focus(), 40); }} />
                 </Suspense>
               )}

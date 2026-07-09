@@ -2,7 +2,10 @@ import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
 import {
   listVaultDocs, vaultUpload, deleteVaultDoc, vaultAsk,
   vaultCitations, vaultExtract, vaultSummary, vaultCounter, vaultTimeline,
-  vaultChain, ChainStep,
+  vaultChain, ChainStep, Verification,
+} from './api';
+import { VerifBadge } from './VerifBadge';
+import {
   vaultReview, listPlaybooks, createPlaybook, deletePlaybook, reviewContract,
   pdfHref, getToken, HttpError,
   VaultDoc, AskResponse, CitationCheck, VaultStructure, TimelineEvent,
@@ -97,7 +100,8 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
   const [citations, setCitations] = useState<{ references: CitationCheck[]; verified: number; total: number } | null>(null);
   const [extract, setExtract] = useState<VaultStructure | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
-  const [counter, setCounter] = useState<{ answer: string | null; refused: boolean; citations: AskResponse['citations'] } | null>(null);
+  const [counter, setCounter] = useState<{ answer: string | null; refused: boolean;
+    citations: AskResponse['citations']; verification?: Verification | null } | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[] | null>(null);
 
   // Changement de document : on repart d'un panneau vierge.
@@ -207,6 +211,7 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
         ) : (
           <>
             <p style={{ whiteSpace: 'pre-wrap' }}>{counter.answer}</p>
+            <VerifBadge v={counter.verification} />
             <CitationList resp={{ answer: counter.answer, citations: counter.citations, refused: counter.refused }} />
           </>
         )
@@ -248,7 +253,7 @@ function AnalysisPanel({ doc }: { doc: VaultDoc }) {
                 ) : s.task === 'counter' ? (
                   s.refused || !s.answer
                     ? <p className="muted">Aucun contre-argumentaire produit (éléments insuffisants).</p>
-                    : <p style={{ whiteSpace: 'pre-wrap' }}>{s.answer}</p>
+                    : <><p style={{ whiteSpace: 'pre-wrap' }}>{s.answer}</p><VerifBadge v={s.verification} /></>
                 ) : s.task === 'summary' ? (
                   <p style={{ whiteSpace: 'pre-wrap' }}>{s.summary}</p>
                 ) : (

@@ -205,4 +205,9 @@ export const INTENTIONS = {
   'W24-02-export-word': { intention: "Ouvrir mon document dans Word", attendu: "« Word » télécharge un .doc au nom du brouillon (papier à en-tête inclus)" },
   // ── W25. Chaîne de travail Vault (B11 v1) ──
   'W25-01-chaine-complete': { intention: "Analyser un document en un geste", attendu: "La chaîne exécute citations → contre-argumentaire → résumé et empile les 3 résultats" },
+  // ── W26. Veille v2 : auto-vérification (I1), recettes (I2), approfondie (I3) ──
+  'W26-01-contre-argumentaire-verifie': { intention: "Faire confiance à une sortie LLM", attendu: "Le contre-argumentaire porte le badge « n/n citations vérifiées au corpus »" },
+  'W26-02-recette-question': { intention: "Lancer un travail type en un clic", attendu: "La recette « question » de l'accueil lance la recherche et aboutit" },
+  'W26-03-recette-redaction-preremplie': { intention: "Démarrer un courrier type en un clic", attendu: "La recette « rédaction » ouvre l'atelier pré-rempli (modèle + instruction)" },
+  'W26-04-recherche-approfondie': { intention: "Creuser une question complexe", attendu: "« Approfondie » produit un mémo multi-axes structuré et sourcé" },
 };

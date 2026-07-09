@@ -55,6 +55,18 @@ const TIMEOUT_MS = 60_000;
 
 export interface Turn { role: string; content: string; }
 
+// Filtres nettoyés — UNE seule implémentation pour ask / askStream / askDeep.
+// (Corrige au passage : la version non-streamée perdait source_type, et country manquait partout.)
+function cleanFilters(filters: SearchFilters): SearchFilters {
+  const cleaned: SearchFilters = {};
+  if (typeof filters.year_min === 'number' && !isNaN(filters.year_min)) cleaned.year_min = filters.year_min;
+  if (typeof filters.year_max === 'number' && !isNaN(filters.year_max)) cleaned.year_max = filters.year_max;
+  if (filters.juridiction_key?.trim()) cleaned.juridiction_key = filters.juridiction_key.trim();
+  if (filters.source_type) cleaned.source_type = filters.source_type;
+  if (filters.country) cleaned.country = filters.country;
+  return cleaned;
+}
+
 export async function ask(
   q: string,
   topK = 20,
@@ -62,22 +74,19 @@ export async function ask(
   temperature = 0,
   pedagogical = false,
   history: Turn[] = [],
+  endpoint = '/api/ask',
 ): Promise<AskResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  const cleaned: SearchFilters = {};
-  if (typeof filters.year_min === 'number' && !isNaN(filters.year_min)) cleaned.year_min = filters.year_min;
-  if (typeof filters.year_max === 'number' && !isNaN(filters.year_max)) cleaned.year_max = filters.year_max;
-  if (filters.juridiction_key?.trim()) cleaned.juridiction_key = filters.juridiction_key.trim();
-
+  const cleaned = cleanFilters(filters);
   const payload: Record<string, unknown> = { q, topK, temperature };
   if (Object.keys(cleaned).length > 0) payload.filters = cleaned;
   if (pedagogical) payload.pedagogical = true;
   if (history.length) payload.history = history;
 
   try {
-    const res = await fetch('/api/ask', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(payload),
@@ -97,17 +106,19 @@ export async function ask(
   }
 }
 
+// Recherche APPROFONDIE : plan de sous-questions → recherches par axe → mémo structuré
+// sourcé (non-streamée : plusieurs allers-retours corpus/LLM côté serveur).
+export const askDeep = (q: string, topK = 20, filters: SearchFilters = {},
+                        pedagogical = false, history: Turn[] = []) =>
+  ask(q, topK, filters, 0, pedagogical, history, '/api/ask/deep');
+
 // Version STREAMÉE : la réponse s'affiche au fil de la génération (SSE).
 // onDelta reçoit chaque morceau de texte ; onMeta reçoit la méta finale (citations, refus…).
 export async function askStream(
   q: string, topK: number, filters: SearchFilters, temperature: number, pedagogical: boolean,
   onDelta: (text: string) => void, onMeta: (meta: AskResponse) => void, history: Turn[] = [],
 ): Promise<void> {
-  const cleaned: SearchFilters = {};
-  if (typeof filters.year_min === 'number' && !isNaN(filters.year_min)) cleaned.year_min = filters.year_min;
-  if (typeof filters.year_max === 'number' && !isNaN(filters.year_max)) cleaned.year_max = filters.year_max;
-  if (filters.juridiction_key?.trim()) cleaned.juridiction_key = filters.juridiction_key.trim();
-  if (filters.source_type) cleaned.source_type = filters.source_type;
+  const cleaned = cleanFilters(filters);
   const payload: Record<string, unknown> = { q, topK, temperature };
   if (Object.keys(cleaned).length > 0) payload.filters = cleaned;
   if (pedagogical) payload.pedagogical = true;
@@ -542,8 +553,12 @@ export const vaultCitations = (id: number) =>
   vaultAnalyze<{ task: string; references: CitationCheck[]; verified: number; total: number }>(id, 'citations');
 export const vaultExtract = (id: number) => vaultAnalyze<{ task: string } & VaultStructure>(id, 'extract');
 export const vaultSummary = (id: number) => vaultAnalyze<{ task: string; summary: string }>(id, 'summary');
+// Auto-vérification d'une sortie LLM à enjeu : références repassées dans le vérificateur
+// local ancré au corpus → « n/n citations vérifiées ». null = vérificateur indisponible.
+export interface Verification { verified: number; total: number; references: CitationCheck[]; }
 export const vaultCounter = (id: number) =>
-  vaultAnalyze<{ task: string; answer: string | null; refused: boolean; citations: Citation[] }>(id, 'counter');
+  vaultAnalyze<{ task: string; answer: string | null; refused: boolean; citations: Citation[];
+    verification?: Verification | null }>(id, 'counter');
 export const vaultTimeline = (id: number) => vaultAnalyze<{ task: string; events: TimelineEvent[] }>(id, 'timeline');
 
 // Chaîne de travail (B11 v1) : séquence d'analyses en un appel ; une étape en panne est
@@ -552,6 +567,7 @@ export interface ChainStep {
   task: string; error?: string;
   references?: CitationCheck[]; verified?: number; total?: number;      // citations
   answer?: string | null; refused?: boolean; citations?: Citation[];    // counter
+  verification?: Verification | null;                                   // counter : auto-vérification
   summary?: string;                                                     // summary
   events?: TimelineEvent[];                                             // timeline
   matter?: string | null; outcome?: string | null;                      // extract (partiel)
@@ -634,11 +650,13 @@ export const redactionBrouillons = () =>
 export const redactionBrouillon = (id: number) =>
   request<Brouillon>(`/api/redaction/brouillons/${id}`);
 export const redactionGenerer = (p: GenererPayload) =>
-  request<{ refused: boolean; answer?: string; draft?: Brouillon }>('/api/redaction/brouillons', 'POST', p);
+  request<{ refused: boolean; answer?: string; draft?: Brouillon;
+    verification?: Verification | null }>('/api/redaction/brouillons', 'POST', p);
 export const redactionPatch = (id: number, patch: { title?: string; content?: string }) =>
   request<Brouillon>(`/api/redaction/brouillons/${id}`, 'PATCH', patch);
 export const redactionRaffiner = (id: number, instruction: string) =>
-  request<{ refused: boolean; draft: Brouillon }>(`/api/redaction/brouillons/${id}/raffiner`, 'POST', { instruction });
+  request<{ refused: boolean; draft: Brouillon;
+    verification?: Verification | null }>(`/api/redaction/brouillons/${id}/raffiner`, 'POST', { instruction });
 export const redactionSupprimer = (id: number) =>
   request<void>(`/api/redaction/brouillons/${id}`, 'DELETE');
 

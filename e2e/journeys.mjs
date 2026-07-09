@@ -1806,6 +1806,46 @@ await journey(browser, 'W25-01-chaine-complete', async (page) => {
   if (n !== 3) throw new Error(`3 étapes attendues, ${n} rendues`);
 });
 
+// ═══════════ W26. VEILLE v2 — auto-vérification (I1), recettes (I2), approfondie (I3) ═══════════
+await journey(browser, 'W26-01-contre-argumentaire-verifie', async (page) => {
+  // I1 : la sortie LLM porte le badge « n/n citations vérifiées au corpus » (vérif locale).
+  await vaultPro(page); await ouvrirAnalyse(page);
+  await page.getByRole('button', { name: 'Contre-argumentaire' }).first().click();
+  await voir(page, 'Contre-argumentaire de test', { timeout: 12000 });
+  await voir(page, 'citation vérifiée au corpus', { timeout: 6000 });   // badge ✓ 1/1
+});
+
+await journey(browser, 'W26-02-recette-question', async (page) => {
+  // I2 : une recette « question » sur l'accueil lance la recherche en un clic.
+  await entrer(page);
+  await voir(page, "Recettes prêtes à l'emploi");
+  await page.locator('.recette').filter({ hasText: 'Licenciement avec effet immédiat' }).first().click();
+  await page.locator('.bubble.user').filter({ hasText: 'faute grave' }).first().waitFor({ timeout: 12000 });
+  await voir(page, 'parcours guidé', { timeout: 15000 });               // réponse aboutie
+});
+
+await journey(browser, 'W26-03-recette-redaction-preremplie', async (page) => {
+  // I2 : une recette « rédaction » ouvre l'atelier PRÉ-REMPLI (modèle + variables + instruction).
+  await entrer(page);
+  await page.locator('.recette').filter({ hasText: 'Mise en demeure — loyers impayés' }).first().click();
+  await page.waitForURL('**/redaction', { timeout: 8000 });
+  await dismissOnboarding(page);
+  await page.waitForTimeout(800);                                        // catalogue chargé → recette appliquée
+  const instr = await page.locator('.draft-setup textarea').inputValue();
+  if (!instr.includes('mise en demeure pour loyers impayés')) throw new Error('instruction non préremplie : ' + instr);
+  await voir(page, 'Courrier formel exigeant');                          // modèle sélectionné
+});
+
+await journey(browser, 'W26-04-recherche-approfondie', async (page) => {
+  // I3 : « Approfondie » → mémo multi-axes structuré (carte thématique) + sources.
+  await entrer(page);
+  await page.locator('.search-hero textarea').fill('Licenciement avec effet immédiat ?');
+  await page.getByRole('button', { name: /Approfondie/ }).click();
+  await page.locator('.tmap').first().waitFor({ timeout: 20000 });       // mémo en constellation
+  await voir(page, 'Synthèse', { timeout: 4000 });                       // section finale du mémo
+  await voir(page, 'Sources', { timeout: 4000 });                        // citations union des axes
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

@@ -3,13 +3,15 @@
 // n'est décoratif. Aucun nouveau backend : alertes + historique + corpus déjà exposés.
 import { useEffect, useState } from 'react';
 import { listAlerts, getHistory, Alert, HistoryItem, Corpus, Me } from './api';
+import { RECETTES, lancerRecetteRedaction } from './recettes';
 
-export function Today({ account, corpusInfo, alertUnseen, onOpenAlerts, onResume }: {
+export function Today({ account, corpusInfo, alertUnseen, onOpenAlerts, onResume, onAsk }: {
   account: Me | null;
   corpusInfo: Corpus | null;
   alertUnseen: number;
   onOpenAlerts: () => void;
   onResume: (q: string) => void;
+  onAsk: (q: string) => void;
 }) {
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
   const [history, setHistory] = useState<HistoryItem[] | null>(null);
@@ -49,6 +51,25 @@ export function Today({ account, corpusInfo, alertUnseen, onOpenAlerts, onResume
         <div className="today-tile">
           <b>{account?.plan === 'pro' ? 'Pro' : 'Étudiant'}</b>
           <span>{quotaTxt}</span>
+        </div>
+      </div>
+
+      {/* Recettes prêtes à l'emploi : briques existantes packagées par domaine (1 clic). */}
+      <div className="today-card today-recettes">
+        <h3>Recettes prêtes à l'emploi</h3>
+        <div className="recette-grid">
+          {RECETTES.map((r) => (
+            <button key={r.titre} className="recette" title={r.desc}
+              onClick={() => {
+                if (r.action.type === 'ask') onAsk(r.action.q);
+                else if (r.action.type === 'redaction') lancerRecetteRedaction(r.action);
+                else window.location.href = '/vault';
+              }}>
+              <span className="recette-dom">{r.domaine}</span>
+              <span className="recette-titre">{r.titre}</span>
+              <span className="recette-desc">{r.desc}</span>
+            </button>
+          ))}
         </div>
       </div>
 

@@ -15,6 +15,8 @@ import {
   ModeleIntegre, ModeleUtilisateur, Brouillon, BrouillonResume, VariableModele,
 } from './api';
 import { renderAnswer } from './App';
+import { VerifBadge } from './VerifBadge';
+import type { Verification } from './api';
 
 type Choix =
   | { type: 'libre' }
@@ -74,6 +76,8 @@ export function DraftEmbedded() {
   const [longueur, setLongueur] = useState('');
   // document courant
   const [draft, setDraft] = useState<Brouillon | null>(null);
+  // Auto-vérification de la dernière génération/raffinage (« n/n citations vérifiées »).
+  const [verif, setVerif] = useState<Verification | null | undefined>(undefined);
   const [refusMsg, setRefusMsg] = useState<string | null>(null);
   const [raffinage, setRaffinage] = useState('');
   const [busy, setBusy] = useState<'' | 'generer' | 'raffiner' | 'charger'>('');
@@ -96,6 +100,21 @@ export function DraftEmbedded() {
     getBranding().then(setBrand).catch(() => {});
   };
   useEffect(chargerCatalogue, []);
+
+  // Recette « rédaction » lancée depuis l'accueil : pré-remplit l'atelier (consommée une fois).
+  useEffect(() => {
+    const brut = sessionStorage.getItem('jx_recette_redaction');
+    if (!brut || integres.length === 0) return;
+    sessionStorage.removeItem('jx_recette_redaction');
+    try {
+      const r = JSON.parse(brut);
+      const m = integres.find((x) => x.slug === r.modele);
+      if (m) setChoix({ type: 'integre', m });
+      setVariables(r.variables || {});
+      setInstruction(r.instruction || '');
+      setTon(r.ton || '');
+    } catch { /* recette illisible : atelier vierge */ }
+  }, [integres]);
 
   // Lit une image locale en data-URL (plafonnée ~500 Ko) et l'enregistre côté serveur.
   const chargerImage = (champ: 'logo' | 'signature') => (e: ChangeEvent<HTMLInputElement>) => {
@@ -147,7 +166,7 @@ export function DraftEmbedded() {
         variables, ton: ton || undefined, longueur: longueur || undefined,
       });
       if (res.refused || !res.draft) setRefusMsg(res.answer || 'Aucun fondement trouvé — précisez votre demande.');
-      else { setDraft(res.draft); redactionBrouillons().then(setBrouillons).catch(() => {}); }
+      else { setDraft(res.draft); setVerif(res.verification); redactionBrouillons().then(setBrouillons).catch(() => {}); }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La rédaction a échoué, réessayez.');
     } finally { setBusy(''); }
@@ -159,14 +178,14 @@ export function DraftEmbedded() {
     try {
       const res = await redactionRaffiner(draft.id, raffinage.trim());
       if (res.refused) setError('Raffinage indisponible pour le moment — réessayez.');
-      else { setDraft(res.draft); setRaffinage(''); }
+      else { setDraft(res.draft); setVerif(res.verification); setRaffinage(''); }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Le raffinage a échoué.');
     } finally { setBusy(''); }
   };
 
   const ouvrir = async (id: number) => {
-    setBusy('charger'); setError(null); setRefusMsg(null);
+    setBusy('charger'); setError(null); setRefusMsg(null); setVerif(undefined);
     try { setDraft(await redactionBrouillon(id)); }
     catch { setError('Impossible d’ouvrir ce brouillon.'); }
     finally { setBusy(''); }
@@ -426,6 +445,7 @@ export function DraftEmbedded() {
                   )}
                   <div className="draft-doc answer"
                     dangerouslySetInnerHTML={{ __html: renderAnswer(draft.content, draft.citations || []) }} />
+                  {verif !== undefined && <VerifBadge v={verif} />}
                   <footer className="lh-sign">
                     {brand?.signature ? (
                       <div className="lh-sign-block">

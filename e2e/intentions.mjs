@@ -193,4 +193,7 @@ export const INTENTIONS = {
   'W21-03-cmdk-question': { intention: "Poser une question depuis la palette", attendu: "Entrée lance la recherche juridique dans la vue principale" },
   'W21-04-cmdk-avocat': { intention: "Trouver un avocat depuis la palette", attendu: "Le résultat avocat ouvre directement son profil Insight" },
   'W21-05-cmdk-prefixe-cabinet': { intention: "Trouver un cabinet via le préfixe c:", attendu: "Le résultat cabinet ouvre directement sa fiche" },
+  // ── W22. Accueil « Aujourd'hui » (LOT 3) ──
+  'W22-01-accueil-tableau-de-bord': { intention: "Prendre ses repères en arrivant", attendu: "L'accueil affiche un tableau de bord (salutation, volumétrie, veille, reprise)" },
+  'W22-02-reprendre-depuis-accueil': { intention: "Reprendre une recherche récente", attendu: "L'accueil propose l'historique, un clic pré-remplit le champ" },
 };

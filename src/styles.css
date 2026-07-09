@@ -127,6 +127,32 @@ body {
 .cmdk-item-sub { font-size: 12px; color: var(--muted); }
 .cmdk-item-kind { margin-left: auto; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
   color: var(--muted-2); border: 1px solid var(--border-2); border-radius: 999px; padding: 2px 8px; flex: none; }
+
+/* --- LOT 3 : accueil « Aujourd'hui » (tableau de bord d'entrée) --- */
+.today { margin-top: 34px; text-align: left; }
+.today-head h2 { font-family: var(--serif); font-size: 20px; margin: 0 0 2px; text-transform: capitalize; }
+.today-head p { margin: 0 0 16px; }
+.today-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 640px) { .today-tiles { grid-template-columns: repeat(2, 1fr); } }
+.today-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; text-align: left;
+  border: 1px solid var(--border); border-radius: 11px; background: var(--surface); font: inherit; }
+.today-tile.is-link { cursor: pointer; transition: .12s; }
+.today-tile.is-link:hover { border-color: var(--primary); }
+.today-tile b { font-size: 20px; font-variant-numeric: tabular-nums; color: var(--text); }
+.today-tile b.accentue { color: var(--primary); }
+.today-tile span { font-size: 11.5px; color: var(--muted); }
+.today-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 640px) { .today-cards { grid-template-columns: 1fr; } }
+.today-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+.today-card h3 { font-size: 13px; margin: 0 0 8px; }
+.today-line { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 0;
+  border: none; border-top: 1px dashed var(--border-2); background: none; font: inherit; cursor: pointer; color: var(--text); }
+.today-card .today-line:first-of-type { border-top: none; }
+.today-line:hover .today-line-txt { color: var(--primary); }
+.today-line-txt { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-line-date { flex: none; }
+.badge-fresh { flex: none; font-size: 10.5px; font-weight: 700; color: var(--green); background: var(--green-soft);
+  border-radius: 999px; padding: 2px 8px; }
 .pedago-filter { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text);
   cursor: pointer; width: 100%; margin-top: 2px; }
 .pedago-filter input { accent-color: var(--primary); width: 15px; height: 15px; }

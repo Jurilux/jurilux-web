@@ -16,6 +16,7 @@ const DraftPanel = lazy(() => import('./Draft').then((m) => ({ default: m.DraftE
 const Account = lazy(() => import('./Account').then((m) => ({ default: m.Account })));
 const InsightPanel = lazy(() => import('./Insight').then((m) => ({ default: m.InsightEmbedded })));
 const CmdK = lazy(() => import('./CmdK').then((m) => ({ default: m.CmdK })));
+const TodayEmbedded = lazy(() => import('./Today').then((m) => ({ default: m.Today })));
 
 interface Message {
   id: string;
@@ -928,6 +929,13 @@ export default function App({ initialInsight = false, initialRedaction = false }
                 </div>
                 {filtersPanel}
               </section>
+              {user && messages.length === 0 && (
+                <Suspense fallback={null}>
+                  <TodayEmbedded account={account} corpusInfo={corpusInfo} alertUnseen={alertUnseen}
+                    onOpenAlerts={openAlerts}
+                    onResume={(q) => { setInput(q); setTimeout(() => inputRef.current?.focus(), 40); }} />
+                </Suspense>
+              )}
               <section className="suggest">
                 <div className="suggest-label">Exemples de questions</div>
                 <div className="suggest-list">

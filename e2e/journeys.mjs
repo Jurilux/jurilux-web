@@ -1662,6 +1662,29 @@ await journey(browser, 'W21-05-cmdk-prefixe-cabinet', async (page) => {
   await voir(page, 'Avocats du cabinet', { timeout: 12000 });
 });
 
+// ═══════════════ W22. ACCUEIL « AUJOURD'HUI » — tableau de bord d'entrée (LOT 3) ═══════════════
+await journey(browser, 'W22-01-accueil-tableau-de-bord', async (page) => {
+  // Le champ vide devient un tableau de bord : salutation, volumétrie, veille, reprise.
+  await entrer(page);
+  await voir(page, 'Bonjour');                       // salutation datée
+  await voir(page, 'décisions au corpus');           // tuile volumétrie (cliquable/non)
+  await voir(page, 'Reprendre le travail');          // carte de reprise
+  await voir(page, 'Veille — nouveautés');           // carte de veille
+});
+
+await journey(browser, 'W22-02-reprendre-depuis-accueil', async (page) => {
+  // Après une recherche, l'accueil propose de la REPRENDRE (historique cliquable → pré-remplit).
+  await entrer(page);
+  await ask(page, 'Question test de reprise ?');
+  await voir(page, 'parcours guidé', { timeout: 15000 });       // réponse aboutie → historisée
+  await page.locator('.side-cta').first().click();              // « Nouvelle recherche » → accueil
+  const line = page.locator('.today-line').filter({ hasText: 'Question test de reprise' }).first();
+  await line.waitFor({ state: 'visible', timeout: 8000 });
+  await line.click();                                           // reprise → pré-remplit le champ
+  const val = await page.locator('.search-hero textarea').first().inputValue();
+  if (!val.includes('Question test de reprise')) throw new Error('reprise non préremplie : ' + val);
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

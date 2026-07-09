@@ -1213,6 +1213,175 @@ await journey(browser, 'W15-03-membre-sans-restreindre', async (page) => {
   await absent(page, 'Restreindre');                       // mais pas les contrôles de cloison
 });
 
+// ═══════════ V16. INSIGHT PROFOND — tous les cas d'usage de la page Insight ═══════════
+// La page a 4 vues (Avocats / Cabinets / Analytics / Méthodo & RGPD) + un parcours de
+// découverte (profil → matière → confrères) : chaque interaction est exercée ici.
+
+await journey(browser, 'W16-01-liste-et-recherche', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await voir(page, 'avocats indexés');                       // ligne de stats
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await voir(page, 'Pierre SCHMIT');
+  await absent(page, 'Sophie WAGNER');                       // la recherche filtre bien
+});
+
+await journey(browser, 'W16-02-tri-taux-estime', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.locator('select').nth(1).selectOption({ label: 'Tri : taux estimé favorable' });
+  await page.waitForTimeout(600);
+  // seuil de significativité : seuls les avocats à ≥10 issues estimables apparaissent
+  await voir(page, 'Pierre SCHMIT');
+  await absent(page, 'Sophie WAGNER');
+});
+
+await journey(browser, 'W16-03-filtre-matiere-et-vide', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.locator('select').first().selectOption('Famille');
+  await page.waitForTimeout(600);
+  await voir(page, 'Sophie WAGNER');
+  await absent(page, 'Paul KIEFFER');                        // pas de commercial en Famille
+  // recherche sans résultat → état vide propre
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Zzzzinconnu');
+  await voir(page, 'Aucun avocat');
+});
+
+await journey(browser, 'W16-04-profil-complet', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await page.getByText('Pierre SCHMIT').first().click();
+  await voir(page, 'Cabinet :');                             // rattachement au cabinet
+  await voir(page, 'ÉTUDE SCHMIT & FABER');
+  await voir(page, 'Issue estimée');
+  await voir(page, 'favorables');                            // barre gagné/perdu + légende
+  await voir(page, 'montant médian');                        // KPI montants
+  await voir(page, 'Positions :');                           // demandeur/défendeur
+  await voir(page, 'Activité par année');
+  await voir(page, 'Répartition par juridiction');
+  await voir(page, 'PDF ↗');                                 // décisions ouvrables
+});
+
+await journey(browser, 'W16-05-confrere-adversaire', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await page.getByText('Pierre SCHMIT').first().click();
+  await voir(page, 'Confrères récurrents');
+  await page.locator('.cochip').filter({ hasText: 'Marc MULLER' }).first().click();  // adversaire
+  await voir(page, 'ÉTUDE MULLER');                          // on est sur le profil MULLER
+  await voir(page, 'Bail / logement');
+  // fil d'Ariane : SCHMIT est une étape cliquable, retour à la liste par « Avocats »
+  await page.locator('.crumbs').getByText('Pierre SCHMIT').click();
+  await voir(page, 'Confrères récurrents');
+  await page.locator('.crumbs').getByRole('button', { name: 'Avocats' }).click();
+  await voir(page, 'avocats indexés');
+});
+
+await journey(browser, 'W16-06-parcours-matiere', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await page.getByText('Pierre SCHMIT').first().click();
+  await page.locator('.matter-link').filter({ hasText: 'Droit du travail' }).first().click();
+  await voir(page, 'tendances de la matière');
+  await voir(page, 'dans cette matière');                    // note « position de l'avocat d'origine »
+  await voir(page, 'Avocats liés à cette matière');
+  await voir(page, 'vous y êtes');                           // l'avocat d'origine est marqué
+  // rebond sur un confrère de la matière → son profil s'ouvre
+  await page.locator('.matter-journey .lw-row:not(.lw-row-from)').first().click();
+  await voir(page, 'Issue estimée');
+});
+
+await journey(browser, 'W16-07-comparateur', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await page.getByText('Pierre SCHMIT').first().click();
+  await page.getByRole('button', { name: /Comparer/ }).click();
+  await voir(page, 'Comparer à…');
+  await page.getByPlaceholder('Rechercher le 2ᵉ avocat…').fill('Muller');
+  await page.waitForTimeout(500);
+  await page.locator('.insight-picker .lw-row-simple').first().click();
+  await voir(page, 'Comparaison');
+  await voir(page, 'Issue estimée favorable');
+  await voir(page, 'Marc MULLER');
+  // retour au profil d'origine
+  await page.getByRole('button', { name: /Retour au profil/ }).click();
+  await voir(page, 'Pierre SCHMIT');
+});
+
+await journey(browser, 'W16-08-export-csv-profil', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('Rechercher un avocat…').fill('Schmit');
+  await page.getByText('Pierre SCHMIT').first().click();
+  const dl = page.waitForEvent('download', { timeout: 8000 });
+  await page.getByRole('button', { name: /Export CSV/ }).click();
+  const f = await dl;                                        // le téléchargement démarre
+  if (!f.suggestedFilename().includes('SCHMIT')) throw new Error('nom de fichier CSV inattendu');
+});
+
+await journey(browser, 'W16-09-cabinets-liste-et-fiche', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Cabinets' }).click();
+  await voir(page, 'Cabinets explicitement nommés');
+  await voir(page, 'ÉTUDE SCHMIT & FABER');
+  await page.locator('tr', { hasText: 'ÉTUDE SCHMIT & FABER' }).getByText('ouvrir').click();
+  await voir(page, 'Avocats du cabinet');
+  await voir(page, 'Claire FABER');                          // les 2 avocats du cabinet
+  await voir(page, 'Pierre SCHMIT');
+  // clic sur un avocat du cabinet → bascule sur son profil (vue Avocats)
+  await page.locator('.lw-row-simple').filter({ hasText: 'Claire FABER' }).click();
+  await voir(page, 'Issue estimée');
+});
+
+await journey(browser, 'W16-10-cabinets-recherche-vide', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Cabinets' }).click();
+  await page.getByPlaceholder('Rechercher un cabinet…').fill('Zzzz');
+  await voir(page, 'Aucun cabinet');
+});
+
+await journey(browser, 'W16-11-analytics-complet', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Analytics contentieux' }).click();
+  await voir(page, 'issues estimables');
+  await voir(page, 'montant médian');
+  await voir(page, 'délai médian');
+  await voir(page, 'Par matière');
+  await voir(page, 'Par juridiction');
+  await voir(page, 'Par année');
+  await voir(page, 'Articles les plus visés');
+  await voir(page, 'L.124-10');                              // extraction des articles visés
+});
+
+await journey(browser, 'W16-12-methodo-rgpd', async (page) => {
+  await entrer(page);
+  await page.goto(`${FRONT}/insight`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /Méthodologie/ }).click();
+  await voir(page, 'Jurimétrie, pas justice prédictive');
+  await voir(page, 'Jamais de magistrats');
+  // soumission d'une demande d'opposition
+  await page.getByPlaceholder('Maître Prénom NOM').fill('Maître Pierre SCHMIT');
+  await page.locator('.rgpd-form select').selectOption('opposition');
+  await page.locator('.rgpd-form button.send').click();
+  await voir(page, 'Demande enregistrée');
+});
+
+await journey(browser, 'W16-13-question-nominative-court-circuit', async (page) => {
+  await entrer(page);
+  await ask(page, 'Quelles décisions de Maître Pierre Schmit ?');
+  // lawyer_lookup court-circuite le RAG : profil + volume de décisions, sans réponse LLM
+  await voir(page, 'apparaît dans');
+  await voir(page, 'décision');
+});
+
 await browser.close();
 
 // ---- agrégat + verdict ----

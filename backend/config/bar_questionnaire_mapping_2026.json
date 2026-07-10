@@ -1,0 +1,17 @@
+{
+  "year": 2026,
+  "comment": "Mapping rapport miroir → questionnaire AML/CFT annuel de l'Ordre (administré via Strix). Le logiciel ne remplace pas Strix : il produit un rapport pré-rempli que l'avocat recopie (§ D.1). À vérifier chaque année contre la structure réelle du questionnaire (Annexe 2).",
+  "sections": [
+    { "key": "practice", "label": "Effectifs et mode d'exercice", "source": "entity", "remarks": "Mode d'exercice déclaré à l'onboarding ; effectifs saisis par le RC." },
+    { "key": "matters_total", "label": "Nombre de dossiers ouverts / actifs / clos sur la période", "source": "matters.counts", "remarks": "Comptage sur l'année de référence." },
+    { "key": "matters_in_scope_by_category", "label": "Dossiers in scope par catégorie d'activité (art. 2-1(12))", "source": "matters.in_scope_by_category", "remarks": "Chaque valeur est traçable vers la liste des dossiers." },
+    { "key": "clients_by_type", "label": "Répartition des clients par type (PP / PM / construction)", "source": "clients.by_kind", "remarks": "" },
+    { "key": "clients_by_country", "label": "Répartition par pays (résidence / siège)", "source": "clients.by_country", "remarks": "PP : première nationalité ; PM : pays du siège." },
+    { "key": "clients_by_risk", "label": "Répartition par niveau de risque", "source": "matters.by_risk", "remarks": "Dernière évaluation par dossier, override compris." },
+    { "key": "pep_count", "label": "Nombre de PEP (clients, BE, représentants)", "source": "persons.pep_count", "remarks": "" },
+    { "key": "vigilance_measures", "label": "Mesures de vigilance appliquées (standard / renforcée)", "source": "matters.vigilance", "remarks": "Renforcée = risque élevé (US-5.2)." },
+    { "key": "dos", "label": "DOS transmises au Bâtonnier", "source": "dos.declared_count", "remarks": "Comptage uniquement — contenu cloisonné (US-7.4)." },
+    { "key": "trainings", "label": "Formations LBC/FT (heures totales, participants)", "source": "trainings.totals", "remarks": "Registre M8." },
+    { "key": "pssf", "label": "Mandats PSSF", "source": "pssf.active_count", "remarks": "Registre M8." }
+  ]
+}

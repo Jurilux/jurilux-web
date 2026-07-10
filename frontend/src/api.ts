@@ -184,4 +184,29 @@ export const api = {
     ),
   assessRisk: (entityId: string, matterId: string) =>
     call<RiskResult>('POST', `/entities/${entityId}/matters/${matterId}/assess-risk`),
+
+  todoBoard: (entityId: string) => call<TodoBoard>('GET', `/entities/${entityId}/todo`),
+  reportSuspicion: (entityId: string, matterId: string, description: string) =>
+    call<{ acknowledged: boolean }>('POST', `/entities/${entityId}/matters/${matterId}/suspicion`, {
+      description,
+    }),
+  completeReview: (
+    entityId: string,
+    matterId: string,
+    checklist: { identityStillValid: boolean; beneficialOwnersUnchanged: boolean; activityConsistent: boolean },
+  ) =>
+    call<{ riskLevel: string; nextReviewAt: string }>(
+      'POST',
+      `/entities/${entityId}/matters/${matterId}/review`,
+      { checklist },
+    ),
 };
+
+export interface TodoBoard {
+  expiringDocuments: { id: string; docType: string; fileName: string; expiresAt: string | null }[];
+  staleRcsExtracts: { id: string; fileName: string; issuedAt: string | null }[];
+  reviewsDue: { matterId: string; title: string; nextReviewAt: string | null }[];
+  openAlerts: number;
+  frozenMatters: number;
+  purgeUpcoming: { matterId: string; title: string; retentionDueAt: string | null }[];
+}

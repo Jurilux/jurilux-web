@@ -39,6 +39,19 @@ import {
   listRbeChecks,
   listTrainings,
 } from '../modules/registries/service.js';
+import {
+  annualReport,
+  annualReportCsv,
+  ccblExport,
+  createArg,
+  listArg,
+} from '../modules/reports/service.js';
+import {
+  importClientsCsv,
+  reversibilityExport,
+  runPurge,
+  setLegalHold,
+} from '../modules/retention/service.js';
 import { can } from '../permissions.js';
 import { forbidden } from '../errors.js';
 
@@ -431,6 +444,84 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
     const { entityId } = entityParams.parse(req.params);
     const { ctx, role } = await requireEntityAction(db, req.userId!, entityId, 'registry.read');
     return decisionsRegistry(db, ctx, can(role, 'dos.read'));
+  });
+
+  // --- Rapports & ARG (M9) ---
+  app.get('/api/v1/entities/:entityId/reports/annual', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'report.generate');
+    const query = z
+      .object({ year: z.coerce.number().int().min(2020).max(2100), format: z.enum(['json', 'csv']).default('json') })
+      .parse(req.query);
+    const report = await annualReport(db, ctx, query.year);
+    if (query.format === 'csv') {
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header('content-disposition', `attachment; filename="questionnaire-${query.year}.csv"`)
+        .send(annualReportCsv(report));
+    }
+    return report;
+  });
+
+  app.post('/api/v1/entities/:entityId/arg', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'report.generate');
+    const body = z
+      .object({
+        activities: z.string().min(1).max(8000),
+        clientele: z.string().min(1).max(8000),
+        geographies: z.string().min(1).max(8000),
+        channels: z.string().min(1).max(8000),
+        volumes: z.string().min(1).max(8000),
+        mitigations: z.string().min(1).max(8000),
+        conclusion: z.string().min(1).max(8000),
+      })
+      .parse(req.body);
+    return reply.status(201).send(await createArg(db, ctx, body));
+  });
+
+  app.get('/api/v1/entities/:entityId/arg', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'report.generate');
+    return listArg(db, ctx);
+  });
+
+  app.post('/api/v1/entities/:entityId/exports/ccbl', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'export.ccbl');
+    const body = z
+      .object({ sampleMatterIds: z.array(z.string().uuid()).max(500).default([]) })
+      .parse(req.body ?? {});
+    return ccblExport(db, ctx, body.sampleMatterIds);
+  });
+
+  // --- Conservation, purge, réversibilité, import (M10) ---
+  app.post('/api/v1/entities/:entityId/matters/:matterId/legal-hold', async (req) => {
+    const { entityId, matterId } = matterParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'retention.legal_hold');
+    const body = z
+      .object({ hold: z.boolean(), reason: z.string().max(2000).optional() })
+      .parse(req.body);
+    return setLegalHold(db, ctx, matterId, body.hold, body.reason);
+  });
+
+  app.post('/api/v1/entities/:entityId/purge/run', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'retention.legal_hold');
+    return runPurge(db, ctx);
+  });
+
+  app.get('/api/v1/entities/:entityId/exports/reversibility', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'export.reversibility');
+    return reversibilityExport(db, ctx);
+  });
+
+  app.post('/api/v1/entities/:entityId/import/clients-csv', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'client.write');
+    const body = z.object({ csv: z.string().min(1).max(2_000_000) }).parse(req.body);
+    return importClientsCsv(db, ctx, body.csv);
   });
 
   // --- Import des listes de sanctions (plateforme, US-5.4) ---

@@ -116,6 +116,15 @@ select {
   text-align: center;
 }
 button.danger { background: var(--danger); }
+textarea {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+.dos-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.5rem; }
+.todo-urgent { border-left: 4px solid var(--danger); }
 .compare { align-items: start; }
 .compare > div { flex: 1; min-width: 12rem; }
 .compare h3 { margin: 0 0 0.3rem; font-size: 0.9rem; color: var(--muted); }

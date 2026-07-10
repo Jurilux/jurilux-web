@@ -11,6 +11,15 @@ Le dossier produit complet (marché, concurrence, modèle économique, spécific
 3. **Opposabilité** — tout ce qui sort du logiciel est montrable tel quel à la CCBL ou au Bâtonnier.
 4. **Souveraineté** — hébergement UE, aucune donnée hors UE, dépendances auditées.
 
+## État — Sprints 5-8 (M6 vigilance · M7 DOS · M8 registres · M9 rapports · M10 conservation) ✅
+
+- **M6 Vigilance continue** : échéance de revue posée à l'activation selon le risque (3/2/1 ans, paramétré), revue périodique guidée (checklist → re-score → nouvelle échéance), tableau « À faire » (pièces expirantes, extraits RCS > 6 mois, revues dues, alertes ouvertes, dossiers gelés, purges à J-90).
+- **M7 DOS cloisonnée** : signalement interne par tout lawyer/assistant avec accusé neutre ; contenu chiffré AES-GCM avec **clé dérivée par entité** (HKDF) ; lecture/décision réservées `compliance`/`owner` ; décisions motivées chiffrées (les non-déclarations restent au registre) ; dossier de transmission au Bâtonnier généré (rappel immunité art. 5(4)) ; suivi transmission + référence goAML ; **test anti tipping-off automatisé** (CA n°4). Le logiciel ne transmet rien lui-même.
+- **M8 Registres** : formations (total annuel par personne), mandats PSSF (actif/clos), RBE (consultations, divergences, signalement — US-3.4), registre des décisions agrégé (DOS en comptage réservé aux habilités).
+- **M9 Rapports** : rapport miroir du questionnaire annuel de l'Ordre (mapping versionné `bar_questionnaire_mapping_2026.json`, chaque agrégat traçable vers ses dossiers, export JSON + CSV) ; ARG assistée versionnée pré-remplie avec les statistiques réelles du portefeuille ; export contrôle CCBL (ARG + registres + dossiers + échantillon complet, **DOS exclues**).
+- **M10 Conservation** : purge à l'échéance (clôture + 5 ans) — suppression des pièces, anonymisation des personnes/clients orphelins, stats agrégées conservées, journal de purge (CA n°6) ; gel légal motivé qui bloque la purge ; export de réversibilité JSON complet (owner uniquement) ; import initial CSV avec rapport d'erreurs par ligne.
+- **Front** : onglet « À faire » (tableau de vigilance), signalement DOS depuis un dossier avec avertissement anti tipping-off et accusé neutre.
+
 ## État — Sprints 3-4 (M5 risque & screening) ✅
 
 - **Listes de sanctions** : import versionné des listes consolidées UE et ONU (parsing XML, normalisation des noms, checksum — ré-import identique ignoré), réservé au support plateforme (`/api/v1/admin/lists/import`).
@@ -71,9 +80,10 @@ Les tests d'intégration créent une base `lexkyc_test` jetable et s'y connecten
 - Les secrets TOTP sont chiffrés AES-256-GCM avec une clé applicative (`APP_ENC_KEY`, à terme KMS) ; les jetons de session ne sont stockés qu'en SHA-256 ; les mots de passe en scrypt.
 - Aucun paramètre réglementaire codé en dur : seuils, durées et listes vivront en configuration versionnée (§ D.1).
 
-## Prochaines étapes (plan § D.8)
+## Prochaines étapes (Sprint 9 — durcissement & mise en production)
 
-- **Sprint 5 (M6)** : échéancier de vigilance continue (tableau « À faire » : pièces expirées, revues périodiques selon le risque, alertes ouvertes), notifications, revues guidées avec re-score.
-- **Sprint 6 (M7+M8)** : DOS cloisonnée + tests anti tipping-off, registres (formations, PSSF, RBE, décisions).
-- Puis : rapport questionnaire annuel (M9), conservation/purge + audit export (M10).
-- Dette assumée V1 locale : antivirus non branché (`av_status='skipped'` tracé), téléchargement auto des listes + jobs planifiés (BullMQ) et e-mails à brancher au déploiement, RBE/divergences (US-3.4) avec M8, fiche client détaillée côté front.
+- Jobs planifiés (BullMQ + Redis) : téléchargement quotidien des listes UE/ONU, re-screening automatique à chaque mise à jour + hebdomadaire complet, purge automatique, digest e-mail hebdo + notifications immédiates (sans donnée nominative).
+- PDF serveur (rapport annuel, ARG, dossier Bâtonnier) — actuellement JSON/CSV/Markdown imprimables.
+- Antivirus (ClamAV), archive ZIP chiffrée pour l'export CCBL, URLs signées de consultation des pièces.
+- Portail client (M11, phase 2), écrans détaillés fiche client/BE, WCAG AA, préparation pentest, Docker Compose + CI de déploiement.
+- Fonctionnel : effectifs/mode d'exercice dans le rapport annuel (saisie RC), édition de la matrice de risque par le RC avec recalcul en masse (US-5.1), WebAuthn en plus de TOTP.

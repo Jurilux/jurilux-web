@@ -8,6 +8,7 @@ import {
   type MatterSummary,
   type RiskResult,
   type ScopingAnswers,
+  type TodoBoard,
   type UserEntity,
 } from './api';
 
@@ -31,24 +32,27 @@ const CATEGORIES = [
 export default function Workspace(props: { entities: UserEntity[]; onLogout: () => void }) {
   const { t } = useTranslation();
   const [entityId, setEntityId] = useState(props.entities[0]?.entityId ?? '');
-  const [tab, setTab] = useState<'clients' | 'matters' | 'alerts'>('matters');
+  const [tab, setTab] = useState<'todo' | 'clients' | 'matters' | 'alerts'>('todo');
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [matters, setMatters] = useState<MatterSummary[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [todo, setTodo] = useState<TodoBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!entityId) return;
     try {
       setError(null);
-      const [c, m, a] = await Promise.all([
+      const [c, m, a, board] = await Promise.all([
         api.listClients(entityId),
         api.listMatters(entityId),
         api.listAlerts(entityId),
+        api.todoBoard(entityId),
       ]);
       setClients(c);
       setMatters(m);
       setAlerts(a);
+      setTodo(board);
     } catch (e) {
       setError(e instanceof ApiError ? e.code : String(e));
     }
@@ -73,6 +77,9 @@ export default function Workspace(props: { entities: UserEntity[]; onLogout: () 
           <strong>{props.entities[0]?.entityName}</strong>
         )}
         <nav>
+          <button className={tab === 'todo' ? '' : 'secondary'} onClick={() => setTab('todo')}>
+            {t('todo.title')}
+          </button>
           <button className={tab === 'matters' ? '' : 'secondary'} onClick={() => setTab('matters')}>
             {t('matters.title')}
           </button>
@@ -89,11 +96,84 @@ export default function Workspace(props: { entities: UserEntity[]; onLogout: () 
         </nav>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+      {tab === 'todo' && <TodoPanel board={todo} />}
       {tab === 'clients' && <ClientsPanel entityId={entityId} clients={clients} onChanged={reload} />}
       {tab === 'matters' && (
         <MattersPanel entityId={entityId} clients={clients} matters={matters} onChanged={reload} />
       )}
       {tab === 'alerts' && <AlertsPanel entityId={entityId} alerts={alerts} onChanged={reload} />}
+    </div>
+  );
+}
+
+function TodoPanel(props: { board: TodoBoard | null }) {
+  const { t } = useTranslation();
+  const b = props.board;
+  if (!b) return <p className="muted">…</p>;
+  const empty =
+    b.expiringDocuments.length === 0 &&
+    b.staleRcsExtracts.length === 0 &&
+    b.reviewsDue.length === 0 &&
+    b.openAlerts === 0 &&
+    b.frozenMatters === 0 &&
+    b.purgeUpcoming.length === 0;
+  return (
+    <div className="panel">
+      {empty && <p className="muted">{t('todo.empty')}</p>}
+      {b.openAlerts > 0 && (
+        <div className="card todo-urgent">
+          <strong>{t('todo.openAlerts', { count: b.openAlerts })}</strong>
+          {b.frozenMatters > 0 && <p className="help">{t('todo.frozen', { count: b.frozenMatters })}</p>}
+        </div>
+      )}
+      {b.reviewsDue.length > 0 && (
+        <div className="card">
+          <h2>{t('todo.reviewsDue')}</h2>
+          <ul>
+            {b.reviewsDue.map((r) => (
+              <li key={r.matterId}>
+                {r.title} — {r.nextReviewAt?.slice(0, 10)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {b.expiringDocuments.length > 0 && (
+        <div className="card">
+          <h2>{t('todo.expiringDocs')}</h2>
+          <ul>
+            {b.expiringDocuments.map((d) => (
+              <li key={d.id}>
+                {d.fileName} ({d.docType}) — {d.expiresAt?.slice(0, 10)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {b.staleRcsExtracts.length > 0 && (
+        <div className="card">
+          <h2>{t('todo.staleRcs')}</h2>
+          <ul>
+            {b.staleRcsExtracts.map((d) => (
+              <li key={d.id}>
+                {d.fileName} — {d.issuedAt?.slice(0, 10)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {b.purgeUpcoming.length > 0 && (
+        <div className="card">
+          <h2>{t('todo.purgeUpcoming')}</h2>
+          <ul>
+            {b.purgeUpcoming.map((m) => (
+              <li key={m.matterId}>
+                {m.title} — {m.retentionDueAt?.slice(0, 10)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -272,6 +352,9 @@ function MattersPanel(props: {
   const [showForm, setShowForm] = useState(false);
   const [verdict, setVerdict] = useState<{ verdict: string; reason: string } | null>(null);
   const [risks, setRisks] = useState<Record<string, RiskResult>>({});
+  const [dosFor, setDosFor] = useState<string | null>(null);
+  const [dosText, setDosText] = useState('');
+  const [dosAck, setDosAck] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const act = async (fn: () => Promise<unknown>) => {
@@ -286,6 +369,11 @@ function MattersPanel(props: {
 
   return (
     <div className="panel">
+      {dosAck && (
+        <p className="help" role="status">
+          {t('dos.ack')}
+        </p>
+      )}
       {verdict && (
         <div className={`card verdict verdict-${verdict.verdict}`}>
           <strong>{t(`matters.verdict.${verdict.verdict}`)}</strong>
@@ -354,7 +442,45 @@ function MattersPanel(props: {
                   {t('matters.close')}
                 </button>
               )}
+              {m.status !== 'closed' && (
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    setDosAck(false);
+                    setDosText('');
+                    setDosFor(dosFor === m.id ? null : m.id);
+                  }}
+                >
+                  {t('dos.report')}
+                </button>
+              )}
             </div>
+            {dosFor === m.id && (
+              <form
+                className="dos-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void act(async () => {
+                    await api.reportSuspicion(props.entityId, m.id, dosText);
+                    setDosFor(null);
+                    setDosText('');
+                    setDosAck(true);
+                  });
+                }}
+              >
+                <label>
+                  {t('dos.description')}
+                  <textarea
+                    required
+                    rows={3}
+                    value={dosText}
+                    onChange={(e) => setDosText(e.target.value)}
+                  />
+                </label>
+                <p className="help">{t('dos.notice')}</p>
+                <button type="submit">{t('dos.send')}</button>
+              </form>
+            )}
           </li>
         ))}
         {props.matters.length === 0 && <li className="muted">{t('matters.empty')}</li>}

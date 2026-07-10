@@ -67,6 +67,41 @@ button {
 button.secondary { background: none; color: var(--accent); border: 1px solid var(--accent); }
 button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
+select {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+
+/* Espace de travail (clients & dossiers) */
+.workspace { display: flex; flex-direction: column; gap: 1rem; }
+.workspace-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; flex-wrap: wrap;
+}
+.workspace-bar nav { display: flex; gap: 0.5rem; }
+.panel { display: flex; flex-direction: column; gap: 1rem; }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.list .card { gap: 0.45rem; }
+.row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; }
+.row > label { flex: 1; min-width: 10rem; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+
+.pill {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
+.pill.verdict-in_scope { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.verdict.card { border-left: 4px solid var(--accent); }
+.verdict-out_of_scope, .verdict-exempt_defense, .verdict-exempt_consultation { }
+
 .help { margin: 0; color: var(--muted); font-size: 0.85rem; }
 .error { margin: 0; color: var(--danger); font-size: 0.9rem; font-weight: 600; }
 .otpauth { word-break: break-all; font-size: 0.8rem; }

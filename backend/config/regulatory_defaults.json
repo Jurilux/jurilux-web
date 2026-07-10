@@ -1,0 +1,9 @@
+{
+  "version": "2026.1",
+  "comment": "Paramètres réglementaires par défaut (Loi modifiée du 12 novembre 2004). Externalisés en configuration : jamais codés en dur (§ D.1, anticipation AMLR 2027).",
+  "retention_years": 5,
+  "id_expiry_warning_days": 60,
+  "rcs_extract_max_age_months": 6,
+  "beneficial_owner_threshold_pct": 25,
+  "review_interval_years": { "low": 3, "medium": 2, "high": 1 }
+}

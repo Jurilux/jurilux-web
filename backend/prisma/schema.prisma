@@ -110,6 +110,223 @@ model Session {
   @@map("sessions")
 }
 
+// ============================================================================
+// M3 — Clients & bénéficiaires effectifs · M4 — Dossiers (Sprints 1-2)
+// Toutes ces tables portent entity_id et sont couvertes par la RLS.
+// ============================================================================
+
+enum ClientKind {
+  natural     // personne physique
+  legal       // personne morale
+  arrangement // construction juridique (trust, fiducie)
+}
+
+enum ClientStatus {
+  active
+  archived
+}
+
+enum PepStatus {
+  not_pep
+  pep
+  family_member   // membre de la famille d'une PEP
+  close_associate // personne connue pour être étroitement associée
+}
+
+enum LinkRole {
+  self             // la personne/PM EST le client
+  beneficial_owner
+  representative
+  principal_director // dirigeant principal retenu à défaut de BE (> 25 %) — justification obligatoire
+  settlor
+  trustee
+  protector
+  beneficiary
+}
+
+enum ScopingVerdict {
+  in_scope
+  out_of_scope
+  exempt_defense      // défense / représentation en justice
+  exempt_consultation // consultation juridique hors finalité LBC
+}
+
+enum MatterCategory {
+  real_estate
+  company_formation
+  pssf
+  family_office
+  tax_advice
+  asset_management
+  funds_of_third_parties
+  litigation
+  consultation
+  other
+}
+
+enum MatterStatus {
+  draft
+  pending_cdd
+  active
+  under_review
+  closed
+}
+
+enum AvStatus {
+  pending
+  clean
+  infected
+  skipped // antivirus non disponible — tracé, jamais silencieux
+}
+
+model Client {
+  id        String       @id @default(uuid()) @db.Uuid
+  entityId  String       @map("entity_id") @db.Uuid
+  kind      ClientKind
+  // Libellé d'affichage (nom PP ou dénomination PM) — recopié pour les listes.
+  displayName String     @map("display_name")
+  status    ClientStatus @default(active)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  links   ClientLink[]
+  matters Matter[]
+
+  @@index([entityId])
+  @@map("clients")
+}
+
+model Person {
+  id            String    @id @default(uuid()) @db.Uuid
+  entityId      String    @map("entity_id") @db.Uuid
+  firstNames    String    @map("first_names")
+  lastName      String    @map("last_name")
+  birthDate     DateTime? @map("birth_date") @db.Date
+  birthPlace    String?   @map("birth_place")
+  nationalities String[]  @default([])
+  addressJson   Json?     @map("address_json")
+  idNumber      String?   @map("id_number")
+  profession    String?
+  pepStatus     PepStatus @default(not_pep) @map("pep_status")
+  pepDetailsJson Json?    @map("pep_details_json")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  links ClientLink[]
+
+  @@index([entityId])
+  @@map("persons")
+}
+
+model LegalEntityParty {
+  id                String   @id @default(uuid()) @db.Uuid
+  entityId          String   @map("entity_id") @db.Uuid
+  name              String
+  form              String?
+  rcsNumber         String?  @map("rcs_number")
+  country           String
+  addressJson       Json?    @map("address_json")
+  activity          String?
+  activityCountries String[] @default([]) @map("activity_countries")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  links ClientLink[]
+
+  @@index([entityId])
+  @@map("legal_entity_parties")
+}
+
+// Lien client ↔ personne/PM avec rôle (US-3.3, US-3.5).
+model ClientLink {
+  id            String   @id @default(uuid()) @db.Uuid
+  entityId      String   @map("entity_id") @db.Uuid
+  clientId      String   @map("client_id") @db.Uuid
+  personId      String?  @map("person_id") @db.Uuid
+  legalPartyId  String?  @map("legal_party_id") @db.Uuid
+  role          LinkRole
+  ownershipPct  Decimal? @map("ownership_pct") @db.Decimal(5, 2)
+  controlNature String?  @map("control_nature")
+  // Obligatoire pour principal_director (à défaut de BE > 25 %).
+  justification String?
+  verified      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  client     Client            @relation(fields: [clientId], references: [id])
+  person     Person?           @relation(fields: [personId], references: [id])
+  legalParty LegalEntityParty? @relation(fields: [legalPartyId], references: [id])
+
+  @@index([entityId])
+  @@index([clientId])
+  @@map("client_links")
+}
+
+// Documents avec suivi d'expiration (US-3.1 : alerte à J-60 ; US-3.2 : extrait RCS > 6 mois).
+model Document {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityId   String   @map("entity_id") @db.Uuid
+  ownerType  String   @map("owner_type") // person | legal_party | client | matter | entity
+  ownerId    String   @map("owner_id") @db.Uuid
+  docType    String   @map("doc_type") // id_card | passport | rcs_extract | statutes | rbe_extract | ...
+  fileName   String   @map("file_name")
+  mimeType   String   @map("mime_type")
+  sizeBytes  Int      @map("size_bytes")
+  expiresAt  DateTime? @map("expires_at") @db.Date
+  issuedAt   DateTime? @map("issued_at") @db.Date
+  storageKey String   @map("storage_key")
+  checksum   String
+  avStatus   AvStatus @default(skipped) @map("av_status")
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityId])
+  @@index([entityId, expiresAt])
+  @@map("documents")
+}
+
+// M4 — Dossiers (matters). Qualification versionnée et tracée (US-4.1).
+model Matter {
+  id                 String         @id @default(uuid()) @db.Uuid
+  entityId           String         @map("entity_id") @db.Uuid
+  clientId           String         @map("client_id") @db.Uuid
+  title              String
+  scopingVerdict     ScopingVerdict @map("scoping_verdict")
+  scopingAnswersJson Json           @map("scoping_answers_json")
+  scopingVersion     String         @map("scoping_version")
+  category           MatterCategory
+  status             MatterStatus   @default(draft)
+  pssf               Boolean        @default(false)
+  fundsOrigin        String?        @map("funds_origin")
+  fundsOriginNote    String?        @map("funds_origin_note")
+  countries          String[]       @default([])
+  estVolume          String?        @map("est_volume")
+  openedAt           DateTime       @default(now()) @map("opened_at")
+  closedAt           DateTime?      @map("closed_at")
+  // Point de départ des 5 ans de conservation (US-4.4) — posé à la clôture.
+  retentionDueAt     DateTime?      @map("retention_due_at")
+  legalHold          Boolean        @default(false) @map("legal_hold")
+  legalHoldReason    String?        @map("legal_hold_reason")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([entityId])
+  @@index([entityId, status])
+  @@map("matters")
+}
+
+// Historique des re-qualifications (US-4.1 : verdict horodaté et versionné).
+model ScopingRevision {
+  id           String         @id @default(uuid()) @db.Uuid
+  entityId     String         @map("entity_id") @db.Uuid
+  matterId     String         @map("matter_id") @db.Uuid
+  verdict      ScopingVerdict
+  answersJson  Json           @map("answers_json")
+  version      String
+  reason       String?
+  decidedBy    String         @map("decided_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@index([entityId, matterId])
+  @@map("scoping_revisions")
+}
+
 // Tête de chaîne du journal d'audit : ligne unique verrouillée FOR UPDATE à chaque
 // insertion, pour un chaînage linéaire correct même sous RLS (l'app ne voit pas
 // forcément le dernier événement des autres entités).

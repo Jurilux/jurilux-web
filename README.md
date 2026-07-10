@@ -11,6 +11,14 @@ Le dossier produit complet (marché, concurrence, modèle économique, spécific
 3. **Opposabilité** — tout ce qui sort du logiciel est montrable tel quel à la CCBL ou au Bâtonnier.
 4. **Souveraineté** — hébergement UE, aucune donnée hors UE, dépendances auditées.
 
+## État — Sprints 1-2 (M3 clients & BE + M4 dossiers) ✅
+
+- **M3 Clients & bénéficiaires effectifs** : clients PP (création minimale + indicateur de complétude), PM et constructions juridiques, liens BE avec règle > 25 % / contrôle par d'autres moyens, dirigeant principal à justification obligatoire (US-3.3), rôles de trust (settlor/trustee/protector/bénéficiaire).
+- **Documents** : upload multipart (type MIME vérifié sur le contenu réel, taille plafonnée, checksum), suivi d'expiration (J-60 paramétré), stockage par adaptateur (`LocalFsStorage` en V1, S3/MinIO à venir), `av_status` tracé.
+- **M4 Dossiers** : qualification in/out scope à l'ouverture (`scoping.ts`, logique pure versionnée + table de vérité testée), re-qualification tracée (`ScopingRevision`), statuts `draft → pending_cdd → active → closed`, activation refusée sans champs de vigilance (US-4.2) ni BE vérifié/dirigeant justifié (US-3.3), marquage PSSF automatique, clôture = départ de la conservation 5 ans (paramétrée).
+- **Référentiel réglementaire externalisé** : `config/regulatory_defaults.json` (seuil BE, durées, périodicités de revue) — rien en dur (§ D.1).
+- **Front** : espace de travail par entité — clients, flux « Nouveau dossier » avec questionnaire de qualification et verdict expliqué en langage clair (§ D.7-2), activation/clôture.
+
 ## État — Sprint 0 (fondations) ✅
 
 - Monorepo npm workspaces : `backend/` (Fastify + Prisma + PostgreSQL 16) et `frontend/` (Vite + React + TS, i18n FR/EN).
@@ -55,6 +63,6 @@ Les tests d'intégration créent une base `lexkyc_test` jetable et s'y connecten
 
 ## Prochaines étapes (plan § D.8)
 
-- **Sprints 1-2** : M3 clients PP/PM + bénéficiaires effectifs, documents avec expiration, M4 dossiers + qualification in/out scope (`scoping.ts` + table de vérité).
-- **Sprints 3-4** : M5 import listes UE/ONU, matching, alertes bloquantes, scoring configurable.
+- **Sprints 3-4 (M5)** : import quotidien des listes de sanctions UE/ONU (versionnées), moteur de matching (normalisation Unicode, Jaro-Winkler, discriminants), alertes bloquantes (dossier gelé + notification RC < 1 min), scoring configurable (`risk_matrix_default.json`), vigilance renforcée PEP/pays à haut risque.
 - Puis : échéancier (M6), DOS cloisonnée + tests anti tipping-off (M7), registres (M8), rapport questionnaire annuel (M9), conservation/purge (M10).
+- Dette assumée V1 locale : antivirus non branché (`av_status='skipped'` tracé), RBE/divergences (US-3.4) avec le registre M8, page « fiche client » détaillée côté front.

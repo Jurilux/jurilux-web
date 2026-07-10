@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, api, type UserEntity } from './api';
+import Workspace from './Workspace';
 import i18n from './i18n';
 
 // Sprint 0 : parcours connexion (MFA obligatoire), enrôlement, onboarding de
@@ -54,7 +55,7 @@ export default function App() {
         )}
         {screen.name === 'onboarding' && <OnboardingWizard onDone={afterLogin} />}
         {screen.name === 'dashboard' && (
-          <Dashboard entities={screen.entities} onLogout={() => setScreen({ name: 'login' })} />
+          <Workspace entities={screen.entities} onLogout={() => setScreen({ name: 'login' })} />
         )}
       </main>
     </div>
@@ -266,28 +267,3 @@ function OnboardingWizard(props: { onDone: () => Promise<void> }) {
   );
 }
 
-function Dashboard(props: { entities: UserEntity[]; onLogout: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <div className="card">
-      <h2>{t('dashboard.title')}</h2>
-      <ul>
-        {props.entities.map((e) => (
-          <li key={e.entityId}>
-            <strong>{e.entityName}</strong> — {t('dashboard.entity')} {e.entityType} ({e.role})
-          </li>
-        ))}
-      </ul>
-      <p className="help">{t('dashboard.empty')}</p>
-      <button
-        type="button"
-        className="secondary"
-        onClick={() => {
-          void api.logout().finally(props.onLogout);
-        }}
-      >
-        {t('dashboard.logout')}
-      </button>
-    </div>
-  );
-}

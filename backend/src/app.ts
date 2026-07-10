@@ -1,9 +1,13 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import type { Env } from './env.js';
 import type { Db } from './db.js';
+import { HttpError } from './errors.js';
+import { LocalFsStorage, type StorageAdapter } from './storage.js';
+import { registerEntityRoutes } from './routes/entityRoutes.js';
 import {
   AuthError,
   activateMfa,
@@ -21,6 +25,7 @@ import { createOrganization, listUserEntities } from './modules/orgs/service.js'
 export interface AppDeps {
   env: Env;
   db: Db;
+  storage?: StorageAdapter;
 }
 
 declare module 'fastify' {
@@ -67,8 +72,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
   });
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+  // Uploads : 20 Mo max, un fichier par requête (§ D.5-5).
+  await app.register(multipart, {
+    limits: { fileSize: 20 * 1024 * 1024, files: 1, fields: 10 },
+  });
 
   app.setErrorHandler((err, _req, reply) => {
+    if (err instanceof HttpError) {
+      return reply.status(err.status).send({ error: err.code, detail: err.detail });
+    }
     if (err instanceof AuthError) {
       const status = err.code === 'account_locked' ? 423 : err.code === 'email_taken' ? 409 : 401;
       return reply
@@ -137,6 +149,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.get('/api/v1/me/entities', async (req) => {
     return listUserEntities(deps.db, req.userId!);
+  });
+
+  // --- Clients, dossiers, documents (M3/M4) ---
+  registerEntityRoutes(app, {
+    db: deps.db,
+    storage: deps.storage ?? new LocalFsStorage(deps.env.DATA_DIR),
   });
 
   return app;

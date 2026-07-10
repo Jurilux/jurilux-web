@@ -12,6 +12,8 @@ const schema = z.object({
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'APP_ENC_KEY doit être 32 octets en hexadécimal'),
   SESSION_TTL_HOURS: z.coerce.number().positive().default(8),
+  // Stockage local des documents (V1) — S3/MinIO en production (§ D.6).
+  DATA_DIR: z.string().default('./data'),
 });
 
 export type Env = z.infer<typeof schema>;

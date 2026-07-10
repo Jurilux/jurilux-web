@@ -15,6 +15,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
+    public detail?: string,
   ) {
     super(code);
   }
@@ -32,7 +33,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    throw new ApiError(res.status, typeof data.error === 'string' ? data.error : 'internal');
+    throw new ApiError(
+      res.status,
+      typeof data.error === 'string' ? data.error : 'internal',
+      typeof data.detail === 'string' ? data.detail : undefined,
+    );
   }
   return data as T;
 }
@@ -43,6 +48,35 @@ export interface UserEntity {
   entityType: string;
   orgId: string;
   role: string;
+}
+
+export interface ScopingAnswers {
+  category: string;
+  isDefenseOrJudicialProceedings: boolean;
+  isPureLegalConsultation: boolean;
+  assistsInTransaction: boolean;
+  handlesClientFunds: boolean;
+}
+
+export interface ClientSummary {
+  id: string;
+  kind: string;
+  displayName: string;
+  status: string;
+  createdAt: string;
+  links: { role: string; verified: boolean }[];
+  mattersCount: number;
+}
+
+export interface MatterSummary {
+  id: string;
+  title: string;
+  scopingVerdict: string;
+  category: string;
+  status: string;
+  pssf: boolean;
+  openedAt: string;
+  client: { displayName: string; kind: string };
 }
 
 export const api = {
@@ -70,4 +104,45 @@ export const api = {
       '/orgs',
       input,
     ),
+
+  listClients: (entityId: string) =>
+    call<ClientSummary[]>('GET', `/entities/${entityId}/clients`),
+  createNaturalClient: (
+    entityId: string,
+    input: { firstNames: string; lastName: string; nationalities?: string[]; profession?: string },
+  ) =>
+    call<{ clientId: string; personId: string }>(
+      'POST',
+      `/entities/${entityId}/clients/natural`,
+      input,
+    ),
+  createLegalClient: (entityId: string, input: { name: string; country: string; rcsNumber?: string }) =>
+    call<{ clientId: string; legalPartyId: string }>(
+      'POST',
+      `/entities/${entityId}/clients/legal`,
+      input,
+    ),
+
+  listMatters: (entityId: string) => call<MatterSummary[]>('GET', `/entities/${entityId}/matters`),
+  createMatter: (
+    entityId: string,
+    input: {
+      clientId: string;
+      title: string;
+      category: string;
+      answers: ScopingAnswers;
+      fundsOrigin?: string;
+      countries?: string[];
+      estVolume?: string;
+    },
+  ) =>
+    call<{ matterId: string; verdict: string; reason: string; status: string }>(
+      'POST',
+      `/entities/${entityId}/matters`,
+      input,
+    ),
+  activateMatter: (entityId: string, matterId: string) =>
+    call<{ status: string }>('POST', `/entities/${entityId}/matters/${matterId}/activate`),
+  closeMatter: (entityId: string, matterId: string) =>
+    call<{ status: string }>('POST', `/entities/${entityId}/matters/${matterId}/close`),
 };

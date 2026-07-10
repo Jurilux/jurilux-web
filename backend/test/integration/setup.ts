@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
@@ -14,10 +14,16 @@ const TEST_DB = 'lexkyc_test';
 const APP_USER = 'lexkyc_test_app';
 const APP_PASSWORD = 'lexkyc_test_password';
 
-const migrationPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../prisma/migrations/20260710000000_init/migration.sql',
-);
+const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), '../../prisma/migrations');
+
+/** Toutes les migrations, dans l'ordre chronologique de leur horodatage. */
+function migrationFiles(): string[] {
+  return readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort()
+    .map((name) => join(migrationsDir, name, 'migration.sql'));
+}
 
 export interface TestDb {
   /** URL de connexion applicative (RLS appliquée). */
@@ -40,7 +46,9 @@ export async function setupTestDb(): Promise<TestDb> {
   adminDbUrl.pathname = `/${TEST_DB}`;
   const admin = new pg.Client({ connectionString: adminDbUrl.toString() });
   await admin.connect();
-  await admin.query(readFileSync(migrationPath, 'utf8'));
+  for (const file of migrationFiles()) {
+    await admin.query(readFileSync(file, 'utf8'));
+  }
   await admin.query(`
     DO $$ BEGIN
       CREATE ROLE ${APP_USER} LOGIN PASSWORD '${APP_PASSWORD}' IN ROLE lexkyc_app;

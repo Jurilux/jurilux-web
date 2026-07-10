@@ -1,0 +1,21 @@
+{
+  "name": "lexkyc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LexKYC — solution KYC/LBC-FT pour les avocats du Barreau de Luxembourg",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "test": "npm run test -w backend",
+    "test:integration": "npm run test:integration -w backend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "dev:api": "npm run dev -w backend",
+    "dev:web": "npm run dev -w frontend"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

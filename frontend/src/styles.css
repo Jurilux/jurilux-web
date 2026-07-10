@@ -1,0 +1,72 @@
+/* LexKYC — styles sobres, sans framework. Polices système (aucune ressource externe, § D.5-7). */
+:root {
+  --ink: #1a2332;
+  --muted: #5b6472;
+  --accent: #0f4c81;
+  --danger: #a4262c;
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --border: #d8dce3;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.shell { max-width: 560px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+header { position: relative; margin-bottom: 1.5rem; }
+header h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; }
+.tagline { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.95rem; }
+.lang {
+  position: absolute; top: 0; right: 0;
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  padding: 0.25rem 0.6rem; cursor: pointer; font-size: 0.85rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.card h2 { margin: 0; font-size: 1.2rem; }
+
+label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.92rem; font-weight: 600; }
+label.radio { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 400; }
+
+input {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+fieldset { border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; }
+legend { font-size: 0.92rem; font-weight: 600; padding: 0 0.3rem; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button.secondary { background: none; color: var(--accent); border: 1px solid var(--accent); }
+button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.help { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.error { margin: 0; color: var(--danger); font-size: 0.9rem; font-weight: 600; }
+.otpauth { word-break: break-all; font-size: 0.8rem; }

@@ -1,0 +1,141 @@
+// LexKYC — schéma Sprint 0 : identités & accès (M1), entités de conformité (M2),
+// journal d'audit chaîné (M10, socle). Les tables métier (clients, dossiers, screening…)
+// arrivent aux sprints 1+ ; toute table portant compliance_entity_id sera couverte par RLS.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EntityType {
+  individual          // avocat individuel
+  firm                // société / association intégrée
+  shared_cost_partner // associé en coûts partagés (une ARG par associé)
+}
+
+enum MembershipRole {
+  owner
+  lawyer
+  assistant
+  compliance
+  auditor
+}
+
+enum UserStatus {
+  pending_mfa // compte créé, MFA non enrôlée : aucune connexion possible (US-1.1)
+  active
+  disabled
+}
+
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  billingPlan String   @default("trial") @map("billing_plan")
+  // Mode d'exercice choisi à l'onboarding (US-2.1)
+  practiceMode String  @map("practice_mode")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  entities ComplianceEntity[]
+
+  @@map("organizations")
+}
+
+model ComplianceEntity {
+  id        String     @id @default(uuid()) @db.Uuid
+  orgId     String     @map("org_id") @db.Uuid
+  type      EntityType
+  name      String
+  // Responsable du contrôle / responsable du respect (art. 4 Loi AML/CFT)
+  rcUserId  String?    @map("rc_user_id") @db.Uuid
+  rrUserId  String?    @map("rr_user_id") @db.Uuid
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  org         Organization @relation(fields: [orgId], references: [id])
+  memberships Membership[]
+  auditEvents AuditEvent[]
+
+  @@map("compliance_entities")
+}
+
+model User {
+  id                 String     @id @default(uuid()) @db.Uuid
+  email              String     @unique
+  passwordHash       String     @map("password_hash")
+  // Secret TOTP chiffré (AES-256-GCM, clé applicative) — jamais en clair en base.
+  mfaSecretEnc       String?    @map("mfa_secret_enc")
+  status             UserStatus @default(pending_mfa)
+  // Support éditeur : jamais d'accès aux données métier en clair (US-1.2)
+  isPlatformAdmin    Boolean    @default(false) @map("is_platform_admin")
+  failedLoginCount   Int        @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?  @map("locked_until")
+  passwordChangedAt  DateTime   @default(now()) @map("password_changed_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+
+  memberships Membership[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+model Membership {
+  userId   String         @map("user_id") @db.Uuid
+  entityId String         @map("entity_id") @db.Uuid
+  role     MembershipRole
+
+  user   User             @relation(fields: [userId], references: [id])
+  entity ComplianceEntity @relation(fields: [entityId], references: [id])
+
+  @@id([userId, entityId])
+  @@map("memberships")
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  // Jeton opaque : seul le SHA-256 est stocké.
+  tokenHash  String   @unique @map("token_hash")
+  createdAt  DateTime @default(now()) @map("created_at")
+  // Session glissante 8 h, révocable (US-1.1)
+  expiresAt  DateTime @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  ip         String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Tête de chaîne du journal d'audit : ligne unique verrouillée FOR UPDATE à chaque
+// insertion, pour un chaînage linéaire correct même sous RLS (l'app ne voit pas
+// forcément le dernier événement des autres entités).
+model AuditChain {
+  id       Int    @id
+  lastHash String @map("last_hash")
+
+  @@map("audit_chain")
+}
+
+// Journal d'audit append-only à chaînage de hachés (US-10.1).
+// Aucune mise à jour ni suppression : trigger SQL + absence d'API d'écriture autre qu'INSERT.
+model AuditEvent {
+  id         BigInt   @id @default(autoincrement())
+  entityId   String?  @map("entity_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  objectType String?  @map("object_type")
+  objectId   String?  @map("object_id")
+  ip         String?
+  at         DateTime @default(now())
+  prevHash   String   @map("prev_hash")
+  hash       String
+
+  entity ComplianceEntity? @relation(fields: [entityId], references: [id])
+
+  @@index([entityId, at])
+  @@map("audit_log")
+}

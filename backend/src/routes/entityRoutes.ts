@@ -59,6 +59,7 @@ import {
 } from '../modules/risk/service.js';
 import { runDailyJobs } from '../modules/jobs/service.js';
 import { annualReportPdf, argPdf, markdownishPdf } from '../pdf.js';
+import { encryptedArchive } from '../archive.js';
 import { deriveEntityKeyHex, hmacSignHex, hmacVerifyHex } from '../crypto.js';
 import { SYSTEM_ACTOR, withTenantContext } from '../db.js';
 import { can } from '../permissions.js';
@@ -550,6 +551,67 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
       .object({ sampleMatterIds: z.array(z.string().uuid()).max(500).default([]) })
       .parse(req.body ?? {});
     return ccblExport(db, ctx, body.sampleMatterIds);
+  });
+
+  // Archive chiffrée de l'export CCBL (US-9.2) : tar.gz + AES-256-GCM,
+  // clé dérivée d'une phrase de passe jamais stockée. Inclut les pièces
+  // binaires des dossiers échantillonnés.
+  app.post('/api/v1/entities/:entityId/exports/ccbl/archive', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'export.ccbl');
+    const body = z
+      .object({
+        passphrase: z.string().min(12).max(512),
+        sampleMatterIds: z.array(z.string().uuid()).max(500).default([]),
+      })
+      .parse(req.body);
+    const dump = await ccblExport(db, ctx, body.sampleMatterIds);
+
+    const files: { name: string; data: Buffer }[] = [
+      { name: 'export.json', data: Buffer.from(JSON.stringify(dump, null, 2), 'utf8') },
+      {
+        name: 'README.txt',
+        data: Buffer.from(
+          [
+            'LexKYC — export contrôle CCBL (archive chiffrée)',
+            `Généré le ${dump.generatedAt} pour ${dump.entity.name}.`,
+            '',
+            'Contenu : export.json (ARG, registres, dossiers, évaluations) +',
+            'pièces des dossiers échantillonnés sous documents/.',
+            'Les DOS sont exclues (cloisonnement, US-7.4).',
+            '',
+            'Déchiffrement : AES-256-GCM, clé scrypt dérivée de la phrase de passe',
+            'communiquée séparément. Format: LEXKYC1|salt16|iv12|tag16|gzip(tar).',
+          ].join('\n'),
+          'utf8',
+        ),
+      },
+    ];
+    for (const dossier of dump.sampleDossiers) {
+      for (const doc of dossier.documents) {
+        const full = await withTenantContext(db, ctx, (tx) =>
+          tx.document.findUnique({ where: { id: doc.id } }),
+        );
+        if (!full) continue;
+        try {
+          files.push({
+            name: `documents/${dossier.matter?.id}/${full.fileName}`,
+            data: await storage.get(full.storageKey),
+          });
+        } catch {
+          // Pièce absente du stockage : signalé dans l'archive plutôt qu'échec silencieux.
+          files.push({
+            name: `documents/${dossier.matter?.id}/${full.fileName}.MANQUANT.txt`,
+            data: Buffer.from(`Pièce introuvable dans le stockage (clé ${full.storageKey}).`),
+          });
+        }
+      }
+    }
+    const archive = encryptedArchive(files, body.passphrase);
+    return reply
+      .header('content-type', 'application/octet-stream')
+      .header('content-disposition', 'attachment; filename="export-ccbl.tar.gz.enc"')
+      .send(archive);
   });
 
   // --- Conservation, purge, réversibilité, import (M10) ---

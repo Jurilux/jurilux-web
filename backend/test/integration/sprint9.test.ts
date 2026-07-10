@@ -154,6 +154,21 @@ describe('matrice de risque par entité (US-5.1)', () => {
   });
 });
 
+describe('digest hebdomadaire (US-6.2)', () => {
+  it('envoyé aux owner/compliance de chaque entité, comptages uniquement', async () => {
+    const { NoopMailer } = await import('../../src/mailer.js');
+    const { sendWeeklyDigests } = await import('../../src/modules/jobs/service.js');
+    const mailer = new NoopMailer();
+    const result = await sendWeeklyDigests(db, mailer);
+    expect(result.sent).toBeGreaterThanOrEqual(1);
+    const mail = mailer.sent[0]!;
+    expect(mail.to).toContain('rc@s9.lu');
+    expect(mail.text).toContain('alerte');
+    // Anti-fuite : aucun nom de client du portefeuille dans l'e-mail.
+    expect(mail.text).not.toContain('Jobov');
+  });
+});
+
 describe('PDF serveur & signatures', () => {
   it('rapport annuel : PDF valide généré', async () => {
     const report = await annualReport(db, ctx, 2026);

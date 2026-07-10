@@ -1,0 +1,24 @@
+# LexKYC — reverse proxy + front statique. HTTPS automatique (Let's Encrypt).
+# Same-origin partout : /api → backend, le reste → SPA.
+{$SITE_ADDRESS} {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# CSP stricte : tout est auto-hébergé (§ D.5-7).
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+	}
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

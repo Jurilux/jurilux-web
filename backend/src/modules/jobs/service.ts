@@ -1,8 +1,10 @@
 import type { Db } from '../../db.js';
-import { SYSTEM_ACTOR, withJobContext } from '../../db.js';
+import { SYSTEM_ACTOR, withJobContext, withTenantContext } from '../../db.js';
 import { listSources } from '../../config/screening.js';
 import { importList, runScreening } from '../screening/service.js';
 import { runPurge } from '../retention/service.js';
+import { todoBoard } from '../vigilance/service.js';
+import { weeklyDigestBody, type Mailer } from '../../mailer.js';
 
 // Jobs planifiés (Sprint 9) — ordonnanceur interne sans dépendance externe :
 //  - téléchargement quotidien des listes UE/ONU (US-5.4) ;
@@ -101,6 +103,46 @@ export async function runDailyJobs(db: Db, fetchImpl: FetchLike, opts: { forceRe
   return { lists, screenedEntities, newHits, purgedMatters: purge.purged, errors };
 }
 
+/**
+ * Digest hebdomadaire (US-6.2) : envoyé aux owner/compliance de chaque entité —
+ * comptages uniquement, aucune donnée nominative.
+ */
+export async function sendWeeklyDigests(db: Db, mailer: Mailer): Promise<{ sent: number }> {
+  const entities = await withJobContext(db, (tx) =>
+    tx.complianceEntity.findMany({ select: { id: true, name: true } }),
+  );
+  let sent = 0;
+  for (const entity of entities) {
+    const ctx = { userId: SYSTEM_ACTOR, entityIds: [entity.id], orgIds: [] };
+    const board = await todoBoard(db, ctx);
+    const recipients = await withTenantContext(db, ctx, async (tx) => {
+      const memberships = await tx.membership.findMany({
+        where: { role: { in: ['owner', 'compliance'] } },
+      });
+      const users = await tx.user.findMany({
+        where: { id: { in: memberships.map((m) => m.userId) }, status: 'active' },
+        select: { email: true },
+      });
+      return users.map((u) => u.email);
+    });
+    if (recipients.length === 0) continue;
+    await mailer.send(
+      recipients,
+      'LexKYC — synthèse hebdomadaire de vigilance',
+      weeklyDigestBody({
+        entityName: entity.name,
+        openAlerts: board.openAlerts,
+        frozenMatters: board.frozenMatters,
+        reviewsDue: board.reviewsDue.length,
+        expiringDocuments: board.expiringDocuments.length,
+        purgeUpcoming: board.purgeUpcoming.length,
+      }),
+    );
+    sent++;
+  }
+  return { sent };
+}
+
 /** Marqueur d'exécution (une fois par période, quel que soit le nombre d'instances). */
 export async function shouldRun(db: Db, job: string, intervalHours: number): Promise<boolean> {
   const last = await db.jobRun.findUnique({ where: { job } });
@@ -113,14 +155,22 @@ export async function shouldRun(db: Db, job: string, intervalHours: number): Pro
   return true;
 }
 
-/** Ordonnanceur interne : vérifie toutes les heures ; quotidien + hebdo complet. */
-export function startScheduler(db: Db, logger: { info: (o: object, msg: string) => void; error: (o: object, msg: string) => void }): NodeJS.Timeout {
+/** Ordonnanceur interne : vérifie toutes les heures ; quotidien + hebdo (re-screening complet, digest). */
+export function startScheduler(
+  db: Db,
+  logger: { info: (o: object, msg: string) => void; error: (o: object, msg: string) => void },
+  mailer: Mailer,
+): NodeJS.Timeout {
   const tick = async () => {
     try {
       if (await shouldRun(db, 'daily', 24)) {
         const weekly = await shouldRun(db, 'weekly_full_rescreen', 24 * 7);
         const report = await runDailyJobs(db, fetch, { forceRescreen: weekly });
         logger.info({ report }, 'jobs quotidiens exécutés');
+      }
+      if (await shouldRun(db, 'weekly_digest', 24 * 7)) {
+        const digest = await sendWeeklyDigests(db, mailer);
+        logger.info({ digest }, 'digests hebdomadaires envoyés');
       }
     } catch (e) {
       logger.error({ err: String(e) }, 'échec des jobs planifiés');

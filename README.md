@@ -11,7 +11,13 @@ Le dossier produit complet (marché, concurrence, modèle économique, spécific
 3. **Opposabilité** — tout ce qui sort du logiciel est montrable tel quel à la CCBL ou au Bâtonnier.
 4. **Souveraineté** — hébergement UE, aucune donnée hors UE, dépendances auditées.
 
-## État — Sprint 9 (durcissement) ✅ (partiel — voir « Prochaines étapes »)
+## État — Production (archive chiffrée · e-mails · Docker) ✅
+
+- **Archive chiffrée export CCBL** (US-9.2) : `POST /exports/ccbl/archive` → `tar.gz` chiffré AES-256-GCM (clé scrypt dérivée d'une phrase de passe jamais stockée), incluant `export.json`, un README et les **pièces binaires** des dossiers échantillonnés ; altération détectée (GCM), pièce manquante signalée dans l'archive.
+- **Notifications e-mail** (US-6.2) : digest hebdomadaire envoyé aux `owner`/`compliance` de chaque entité par l'ordonnanceur — **comptages uniquement, aucune donnée nominative** ; adaptateur `Mailer` (Noop journalisé en V1, SMTP à brancher au déploiement).
+- **Déploiement** : `backend/Dockerfile` multi-stage, `deploy/docker-compose.yml` (Postgres 16 + API + Caddy), Caddyfile avec HTTPS auto, HSTS et CSP stricte, `init-db.sql` pour le rôle applicatif non privilégié, guide `docs/DEPLOY.md` (sauvegardes, KMS, jeton liste UE, pentest).
+
+## État — Sprint 9 (durcissement) ✅
 
 - **Jobs planifiés** (ordonnanceur interne, sans Redis) : téléchargement quotidien des listes UE/ONU (`config/list_sources.json`), re-screening automatique de **toutes** les entités quand une liste change + hebdomadaire complet (US-5.6), purge automatique (US-10.2). Déduplication par période via `job_runs`, déclenchement manuel via `/api/v1/admin/jobs/run-daily`, `SCHEDULER=off` pour les instances secondaires.
 - **PDF serveur** (pdf-lib, aucune dépendance binaire) : rapport questionnaire annuel (`format=pdf`), ARG (`/arg/:id/pdf`), dossier Bâtonnier (`format=pdf`).
@@ -87,9 +93,9 @@ Les tests d'intégration créent une base `lexkyc_test` jetable et s'y connecten
 - Les secrets TOTP sont chiffrés AES-256-GCM avec une clé applicative (`APP_ENC_KEY`, à terme KMS) ; les jetons de session ne sont stockés qu'en SHA-256 ; les mots de passe en scrypt.
 - Aucun paramètre réglementaire codé en dur : seuils, durées et listes vivront en configuration versionnée (§ D.1).
 
-## Prochaines étapes (mise en production)
+## Reste à faire avant lancement commercial
 
-- E-mails (digest hebdo + alertes immédiates, sans donnée nominative — SMTP à brancher), antivirus ClamAV, archive chiffrée pour l'export CCBL.
-- Portail client (M11, phase 2), écrans détaillés fiche client/BE, WCAG AA, WebAuthn en plus de TOTP.
-- Docker Compose + CI de déploiement, hébergeur souverain, KMS pour APP_ENC_KEY, préparation pentest.
-- Fonctionnel : effectifs/mode d'exercice saisis par le RC dans le rapport annuel ; jeton public de l'URL liste UE à renseigner dans `config/list_sources.json`.
+- Adaptateur SMTP réel (interface `Mailer` prête) + alertes immédiates par e-mail ; antivirus ClamAV sur l'upload.
+- Portail client (M11, phase 2), écrans détaillés fiche client/BE, audit WCAG AA, WebAuthn en plus de TOTP.
+- Choix de l'hébergeur souverain, KMS pour `APP_ENC_KEY`, jeton public de l'URL liste UE (`config/list_sources.json`), pentest externe.
+- Fonctionnel : effectifs/mode d'exercice saisis par le RC dans le rapport annuel ; interviews avocats (Annexe 2 du dossier) pour valider vocabulaire et prix.

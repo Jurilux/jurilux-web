@@ -1,0 +1,57 @@
+# LexKYC — déploiement Docker Compose (SaaS hébergeur UE ou on-premise, § D.6).
+# Prérequis : créer deploy/.env à partir de deploy/.env.example.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lexkyc
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/10-app-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Migrations avec le rôle propriétaire ; l'app tourne ensuite avec le rôle
+      # applicatif non privilégié (RLS appliquée) — voir init-db.sql.
+      DATABASE_URL: postgresql://lexkyc_app_user:${APP_DB_PASSWORD:?}@db:5432/lexkyc
+      APP_ENC_KEY: ${APP_ENC_KEY:?}
+      PORT: 8080
+      DATA_DIR: /data
+      SCHEDULER: ${SCHEDULER:-on}
+    volumes:
+      - documents:/data
+
+  web:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../frontend/dist:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  documents:
+  caddy_data:
+  caddy_config:

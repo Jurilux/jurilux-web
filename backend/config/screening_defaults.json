@@ -1,0 +1,8 @@
+{
+  "version": "2026.1",
+  "comment": "Paramètres du moteur de matching (US-5.4) : seuil configurable, discriminants pour réduire les faux positifs. Chaque run enregistre ces paramètres.",
+  "similarity_threshold": 0.87,
+  "birth_year_tolerance": 2,
+  "nationality_mismatch_penalty": 0.05,
+  "birth_year_mismatch_discard": true
+}

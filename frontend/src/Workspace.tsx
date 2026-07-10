@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next';
 import {
   ApiError,
   api,
+  type Alert,
   type ClientSummary,
   type MatterSummary,
+  type RiskResult,
   type ScopingAnswers,
   type UserEntity,
 } from './api';
@@ -29,18 +31,24 @@ const CATEGORIES = [
 export default function Workspace(props: { entities: UserEntity[]; onLogout: () => void }) {
   const { t } = useTranslation();
   const [entityId, setEntityId] = useState(props.entities[0]?.entityId ?? '');
-  const [tab, setTab] = useState<'clients' | 'matters'>('matters');
+  const [tab, setTab] = useState<'clients' | 'matters' | 'alerts'>('matters');
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [matters, setMatters] = useState<MatterSummary[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!entityId) return;
     try {
       setError(null);
-      const [c, m] = await Promise.all([api.listClients(entityId), api.listMatters(entityId)]);
+      const [c, m, a] = await Promise.all([
+        api.listClients(entityId),
+        api.listMatters(entityId),
+        api.listAlerts(entityId),
+      ]);
       setClients(c);
       setMatters(m);
+      setAlerts(a);
     } catch (e) {
       setError(e instanceof ApiError ? e.code : String(e));
     }
@@ -71,6 +79,10 @@ export default function Workspace(props: { entities: UserEntity[]; onLogout: () 
           <button className={tab === 'clients' ? '' : 'secondary'} onClick={() => setTab('clients')}>
             {t('clients.title')}
           </button>
+          <button className={tab === 'alerts' ? '' : 'secondary'} onClick={() => setTab('alerts')}>
+            {t('alerts.title')}
+            {alerts.length > 0 && <span className="badge">{alerts.length}</span>}
+          </button>
           <button className="secondary" onClick={() => void api.logout().finally(props.onLogout)}>
             {t('dashboard.logout')}
           </button>
@@ -81,6 +93,87 @@ export default function Workspace(props: { entities: UserEntity[]; onLogout: () 
       {tab === 'matters' && (
         <MattersPanel entityId={entityId} clients={clients} matters={matters} onChanged={reload} />
       )}
+      {tab === 'alerts' && <AlertsPanel entityId={entityId} alerts={alerts} onChanged={reload} />}
+    </div>
+  );
+}
+
+function AlertsPanel(props: { entityId: string; alerts: Alert[]; onChanged: () => Promise<void> }) {
+  const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
+  const runScreening = async () => {
+    setError(null);
+    try {
+      const result = await api.runScreening(props.entityId);
+      setInfo(t('alerts.runDone', { subjects: result.subjectCount, hits: result.newHits }));
+      await props.onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.code : String(e));
+    }
+  };
+
+  const decide = async (hitId: string, decision: 'false_positive' | 'confirmed') => {
+    const reason = reasons[hitId]?.trim();
+    if (!reason) {
+      setError(t('alerts.reasonRequired'));
+      return;
+    }
+    setError(null);
+    try {
+      await api.decideAlert(props.entityId, hitId, decision, reason);
+      await props.onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.code : String(e));
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div className="row">
+        <button onClick={() => void runScreening()}>{t('alerts.run')}</button>
+      </div>
+      {info && <p className="help">{info}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      <ul className="list">
+        {props.alerts.map((a) => (
+          <li key={a.id} className="card alert-card">
+            <div className="row compare">
+              <div>
+                <h3>{t('alerts.subject')}</h3>
+                <p><strong>{a.subject?.fullName}</strong></p>
+                <p className="muted">{a.subject?.birthDate?.slice(0, 10) ?? '—'}</p>
+                <p className="muted">{a.subject?.nationalities.join(', ') || '—'}</p>
+              </div>
+              <div>
+                <h3>{t('alerts.listEntry', { source: a.listSource })}</h3>
+                <p><strong>{a.listEntry.names.join(' / ')}</strong></p>
+                <p className="muted">{a.listEntry.birthDates.join(', ') || '—'}</p>
+                <p className="muted">{a.listEntry.nationalities.join(', ') || '—'}</p>
+              </div>
+            </div>
+            <p className="muted">{t('alerts.similarity', { pct: Math.round(a.similarity * 100) })}</p>
+            <label>
+              {t('alerts.reason')}
+              <input
+                value={reasons[a.id] ?? ''}
+                onChange={(e) => setReasons({ ...reasons, [a.id]: e.target.value })}
+              />
+            </label>
+            <div className="row">
+              <button className="secondary" onClick={() => void decide(a.id, 'false_positive')}>
+                {t('alerts.falsePositive')}
+              </button>
+              <button className="danger" onClick={() => void decide(a.id, 'confirmed')}>
+                {t('alerts.confirm')}
+              </button>
+            </div>
+          </li>
+        ))}
+        {props.alerts.length === 0 && <li className="muted">{t('alerts.empty')}</li>}
+      </ul>
     </div>
   );
 }
@@ -178,6 +271,7 @@ function MattersPanel(props: {
   const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [verdict, setVerdict] = useState<{ verdict: string; reason: string } | null>(null);
+  const [risks, setRisks] = useState<Record<string, RiskResult>>({});
   const [error, setError] = useState<string | null>(null);
 
   const act = async (fn: () => Promise<unknown>) => {
@@ -224,8 +318,32 @@ function MattersPanel(props: {
               <span className={`pill verdict-${m.scopingVerdict}`}>{t(`matters.verdict.${m.scopingVerdict}`)}</span>
               <span className="pill">{t(`matters.status.${m.status}`)}</span>
               {m.pssf && <span className="pill">PSSF</span>}
+              {m.frozen && <span className="pill pill-frozen">{t('matters.frozen')}</span>}
+              {risks[m.id] && (
+                <span className={`pill risk-${risks[m.id]!.level}`}>
+                  {t(`matters.risk.${risks[m.id]!.level}`)} ({risks[m.id]!.score})
+                </span>
+              )}
             </div>
+            {risks[m.id] && risks[m.id]!.factors.length > 0 && (
+              <p className="help">
+                {risks[m.id]!.factors.map((f) => f.label).join(' · ')}
+              </p>
+            )}
             <div className="row">
+              {m.status !== 'closed' && (
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    void act(async () => {
+                      const r = await api.assessRisk(props.entityId, m.id);
+                      setRisks((prev) => ({ ...prev, [m.id]: r }));
+                    })
+                  }
+                >
+                  {t('matters.assessRisk')}
+                </button>
+              )}
               {(m.status === 'draft' || m.status === 'pending_cdd') && (
                 <button className="secondary" onClick={() => void act(() => api.activateMatter(props.entityId, m.id))}>
                   {t('matters.activate')}

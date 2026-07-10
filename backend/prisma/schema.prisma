@@ -297,6 +297,11 @@ model Matter {
   fundsOriginNote    String?        @map("funds_origin_note")
   countries          String[]       @default([])
   estVolume          String?        @map("est_volume")
+  // Canal (axes de la matrice de risque, US-5.1)
+  remoteRelationship Boolean        @default(false) @map("remote_relationship")
+  thirdPartyIntroducer Boolean      @default(false) @map("third_party_introducer")
+  // Gel du dossier sur hit sanctions non levé (US-5.4 : alerte bloquante)
+  frozen             Boolean        @default(false)
   openedAt           DateTime       @default(now()) @map("opened_at")
   closedAt           DateTime?      @map("closed_at")
   // Point de départ des 5 ans de conservation (US-4.4) — posé à la clôture.
@@ -325,6 +330,120 @@ model ScopingRevision {
 
   @@index([entityId, matterId])
   @@map("scoping_revisions")
+}
+
+// ============================================================================
+// M5 — Risque & screening (Sprints 3-4)
+// Les listes de sanctions sont des données publiques mondiales : pas de tenant.
+// Les runs, hits et évaluations de risque sont tenant-scopés (RLS).
+// ============================================================================
+
+enum ListSource {
+  EU
+  UN
+}
+
+enum HitStatus {
+  open
+  false_positive
+  confirmed
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+}
+
+// Version importée d'une liste officielle (US-5.4) : stockage versionné.
+model ListVersion {
+  id          String     @id @default(uuid()) @db.Uuid
+  source      ListSource
+  versionTag  String     @map("version_tag")
+  rawChecksum String     @map("raw_checksum")
+  entryCount  Int        @map("entry_count")
+  importedAt  DateTime   @default(now()) @map("imported_at")
+
+  entries ListEntry[]
+
+  @@index([source, importedAt])
+  @@map("list_versions")
+}
+
+model ListEntry {
+  id              String      @id @default(uuid()) @db.Uuid
+  listVersionId   String      @map("list_version_id") @db.Uuid
+  source          ListSource
+  externalId      String      @map("external_id")
+  kind            String // person | entity
+  names           String[]    @default([])
+  normalizedNames String[]    @default([]) @map("normalized_names")
+  birthDates      String[]    @default([]) @map("birth_dates")
+  nationalities   String[]    @default([])
+  payloadJson     Json?       @map("payload_json")
+
+  listVersion ListVersion @relation(fields: [listVersionId], references: [id])
+
+  @@index([listVersionId])
+  @@map("list_entries")
+}
+
+// Exécution de screening (US-5.4 CA) : versions de listes, sujets, algo, résultat.
+model ScreeningRun {
+  id               String   @id @default(uuid()) @db.Uuid
+  entityId         String   @map("entity_id") @db.Uuid
+  listVersionsJson Json     @map("list_versions_json")
+  algoParamsJson   Json     @map("algo_params_json")
+  subjectCount     Int      @map("subject_count")
+  hitCount         Int      @map("hit_count")
+  startedAt        DateTime @default(now()) @map("started_at")
+
+  hits ScreeningHit[]
+
+  @@index([entityId, startedAt])
+  @@map("screening_runs")
+}
+
+model ScreeningHit {
+  id            String    @id @default(uuid()) @db.Uuid
+  entityId      String    @map("entity_id") @db.Uuid
+  runId         String    @map("run_id") @db.Uuid
+  subjectType   String    @map("subject_type") // person
+  subjectId     String    @map("subject_id") @db.Uuid
+  listSource    ListSource @map("list_source")
+  listExternalId String   @map("list_external_id")
+  listEntryJson Json      @map("list_entry_json")
+  similarity    Decimal   @db.Decimal(5, 4)
+  status        HitStatus @default(open)
+  decidedBy     String?   @map("decided_by") @db.Uuid
+  decidedAt     DateTime? @map("decided_at")
+  reason        String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  run ScreeningRun @relation(fields: [runId], references: [id])
+
+  @@index([entityId, status])
+  @@index([entityId, subjectId, listExternalId])
+  @@map("screening_hits")
+}
+
+// Évaluation de risque (US-5.1) : instantané de la matrice utilisée (reproductibilité).
+model RiskAssessment {
+  id             String    @id @default(uuid()) @db.Uuid
+  entityId       String    @map("entity_id") @db.Uuid
+  matterId       String    @map("matter_id") @db.Uuid
+  matrixVersion  String    @map("matrix_version")
+  score          Int
+  level          RiskLevel
+  factorsJson    Json      @map("factors_json")
+  overrideLevel  RiskLevel? @map("override_level")
+  overrideReason String?   @map("override_reason")
+  overrideBy     String?   @map("override_by") @db.Uuid
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([entityId, matterId, createdAt])
+  @@map("risk_assessments")
 }
 
 // Tête de chaîne du journal d'audit : ligne unique verrouillée FOR UPDATE à chaque

@@ -1,0 +1,8 @@
+{
+  "version": "2026.1",
+  "comment": "Listes de pays (GAFI/UE) en configuration mise à jour — jamais en dur (US-5.2). Codes ISO 3166-1 alpha-2. À rafraîchir à chaque publication GAFI/UE.",
+  "gafi_black": ["IR", "KP", "MM"],
+  "gafi_grey": ["DZ", "AO", "BF", "CM", "CI", "HR", "CD", "HT", "KE", "LB", "ML", "MC", "MZ", "NA", "NG", "PH", "SN", "ZA", "SS", "SY", "TZ", "VE", "VN", "YE"],
+  "eu_high_risk": ["AF", "BB", "BF", "CM", "CD", "GI", "HT", "IR", "JM", "ML", "MZ", "MM", "KP", "PA", "PH", "SN", "SS", "SY", "TZ", "TT", "UG", "AE", "VU", "VN", "YE"],
+  "offshore": ["KY", "VG", "BM", "BS", "PA", "SC", "MU", "JE", "GG", "IM", "LI", "MH", "WS", "BZ"]
+}

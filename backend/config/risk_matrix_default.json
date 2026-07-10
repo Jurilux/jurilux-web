@@ -1,0 +1,26 @@
+{
+  "version": "2026.1",
+  "comment": "Matrice de risque par défaut (Annexe 1 du dossier produit). Modifiable par le RC ; tout calcul conserve un instantané de la matrice utilisée (US-5.1). Les facteurs 'forced' ne sont PAS désactivables (US-5.2).",
+  "thresholds": { "medium": 4, "high": 8 },
+  "factors": [
+    { "id": "pep", "axis": "client", "trigger": "pep_present", "forced": "high", "removable": false, "label": "PEP (client, BE ou représentant)" },
+    { "id": "sanctions_hit", "axis": "client", "trigger": "open_sanctions_hit", "forced": "high", "removable": false, "label": "Hit sanctions non levé" },
+    { "id": "client_not_met", "axis": "client", "trigger": "remote_relationship", "points": 2, "label": "Client jamais rencontré / relation entièrement à distance" },
+    { "id": "complex_structure", "axis": "client", "trigger": "multi_layer_ownership", "points": 2, "label": "Structure à ≥ 2 niveaux de détention" },
+    { "id": "reluctance", "axis": "client", "trigger": "documentation_reluctance", "points": 2, "label": "Réticence documentaire" },
+    { "id": "nominee", "axis": "client", "trigger": "nominee_present", "points": 3, "label": "Nominee / prête-nom" },
+
+    { "id": "gafi_black", "axis": "geography", "trigger": "country_gafi_black", "forced": "high", "removable": false, "label": "Pays liste noire GAFI" },
+    { "id": "eu_high_risk", "axis": "geography", "trigger": "country_eu_high_risk", "forced": "high", "removable": false, "label": "Pays liste UE à haut risque" },
+    { "id": "gafi_grey", "axis": "geography", "trigger": "country_gafi_grey", "points": 3, "label": "Pays liste grise GAFI" },
+    { "id": "offshore", "axis": "geography", "trigger": "country_offshore", "points": 2, "label": "Centre financier offshore" },
+
+    { "id": "pssf", "axis": "service", "trigger": "category_pssf", "points": 3, "label": "PSSF / domiciliation" },
+    { "id": "funds_handling", "axis": "service", "trigger": "category_funds_of_third_parties", "points": 2, "label": "Maniement de fonds de tiers" },
+    { "id": "real_estate", "axis": "service", "trigger": "category_real_estate", "points": 2, "label": "Transaction immobilière" },
+    { "id": "company_setup", "axis": "service", "trigger": "category_company_formation", "points": 2, "label": "Montage sociétaire complexe" },
+
+    { "id": "remote_channel", "axis": "channel", "trigger": "remote_relationship", "points": 2, "label": "Relation entièrement à distance" },
+    { "id": "introducer", "axis": "channel", "trigger": "third_party_introducer", "points": 1, "label": "Apporteur d'affaires tiers" }
+  ]
+}

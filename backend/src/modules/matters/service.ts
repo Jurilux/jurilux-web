@@ -30,6 +30,8 @@ export interface CreateMatterInput {
   fundsOriginNote?: string | undefined;
   countries?: string[] | undefined;
   estVolume?: string | undefined;
+  remoteRelationship?: boolean | undefined;
+  thirdPartyIntroducer?: boolean | undefined;
 }
 
 export async function createMatter(db: Db, ctx: TenantContext, input: CreateMatterInput) {
@@ -55,6 +57,8 @@ export async function createMatter(db: Db, ctx: TenantContext, input: CreateMatt
         fundsOriginNote: input.fundsOriginNote ?? null,
         countries: input.countries ?? [],
         estVolume: input.estVolume ?? null,
+        remoteRelationship: input.remoteRelationship ?? false,
+        thirdPartyIntroducer: input.thirdPartyIntroducer ?? false,
       },
     });
     await tx.scopingRevision.create({
@@ -128,19 +132,58 @@ export async function requalifyMatter(
   });
 }
 
+export interface ActivateOptions {
+  /** Vrai si le rôle de l'appelant porte matter.activate_high_risk (compliance/owner). */
+  canApproveHighRisk: boolean;
+}
+
 /**
  * Activation d'un dossier. Pour un dossier in scope :
  *  - champs obligatoires (US-4.2) : objet, origine des fonds, pays, volume estimé ;
  *  - CDD client (US-3.3) : identification (lien self) et, pour les PM/constructions,
- *    au moins un BE vérifié OU un dirigeant principal justifié.
+ *    au moins un BE vérifié OU un dirigeant principal justifié ;
+ *  - dossier gelé par un hit sanctions : activation impossible (US-5.4) ;
+ *  - risque élevé (US-5.2) : origine du patrimoine documentée (funds_origin_note)
+ *    + approbation compliance/owner obligatoire — vigilance renforcée.
  */
-export async function activateMatter(db: Db, ctx: TenantContext, matterId: string) {
+export async function activateMatter(
+  db: Db,
+  ctx: TenantContext,
+  matterId: string,
+  opts: ActivateOptions = { canApproveHighRisk: false },
+) {
   const entityId = ctx.entityIds[0]!;
   return withTenantContext(db, ctx, async (tx) => {
     const matter = await tx.matter.findUnique({ where: { id: matterId } });
     if (!matter) throw notFound('dossier inconnu');
+    if (matter.frozen) {
+      throw conflict('matter_frozen', 'dossier gelé : hit sanctions en attente de levée de doute');
+    }
     if (matter.status !== 'draft' && matter.status !== 'pending_cdd') {
       throw conflict('invalid_status', `activation impossible depuis le statut ${matter.status}`);
+    }
+
+    // Vigilance renforcée si risque élevé (dernière évaluation, override compris).
+    const latestAssessment = await tx.riskAssessment.findFirst({
+      where: { matterId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const effectiveLevel = latestAssessment
+      ? (latestAssessment.overrideLevel ?? latestAssessment.level)
+      : null;
+    if (effectiveLevel === 'high') {
+      if (!matter.fundsOriginNote?.trim()) {
+        throw badRequest(
+          'wealth_origin_required',
+          'Risque élevé : documenter l’origine du patrimoine (funds_origin_note) avant activation.',
+        );
+      }
+      if (!opts.canApproveHighRisk) {
+        throw badRequest(
+          'high_risk_approval_required',
+          'Risque élevé : l’activation requiert une approbation compliance ou owner (US-5.2).',
+        );
+      }
     }
 
     if (matter.scopingVerdict === 'in_scope') {
@@ -196,6 +239,9 @@ export async function closeMatter(db: Db, ctx: TenantContext, matterId: string) 
     const matter = await tx.matter.findUnique({ where: { id: matterId } });
     if (!matter) throw notFound('dossier inconnu');
     if (matter.status === 'closed') throw conflict('matter_closed');
+    if (matter.frozen) {
+      throw conflict('matter_frozen', 'dossier gelé : hit sanctions en attente de levée de doute');
+    }
     const closedAt = new Date();
     const retentionDueAt = new Date(closedAt);
     retentionDueAt.setFullYear(retentionDueAt.getFullYear() + config.retention_years);

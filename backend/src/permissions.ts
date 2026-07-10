@@ -20,9 +20,11 @@ export const ACTIONS = [
   'matter.read',
   'matter.write',
   'matter.activate_high_risk',
-  // M5 — screening
+  // M5 — screening & risque
   'screening.run',
   'screening.decide',
+  'risk.assess',
+  'risk.override',
   // M7 — DOS (cloisonnée)
   'dos.create',
   'dos.read',
@@ -52,6 +54,8 @@ const MATRIX: Record<Action, readonly Role[]> = {
 
   'screening.run': ['owner', 'lawyer', 'assistant', 'compliance'],
   'screening.decide': ['owner', 'compliance'],
+  'risk.assess': ['owner', 'lawyer', 'assistant', 'compliance'],
+  'risk.override': ['owner', 'compliance'],
 
   'dos.create': ['owner', 'lawyer', 'assistant', 'compliance'],
   'dos.read': ['owner', 'compliance'],

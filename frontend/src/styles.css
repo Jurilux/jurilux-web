@@ -99,6 +99,27 @@ select {
   margin-right: 0.35rem;
 }
 .pill.verdict-in_scope { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pill.pill-frozen { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.pill.risk-high { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.pill.risk-medium { border-color: #b8860b; color: #b8860b; font-weight: 600; }
+.pill.risk-low { border-color: #2e7d32; color: #2e7d32; }
+
+.badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.75rem;
+  text-align: center;
+}
+button.danger { background: var(--danger); }
+.compare { align-items: start; }
+.compare > div { flex: 1; min-width: 12rem; }
+.compare h3 { margin: 0 0 0.3rem; font-size: 0.9rem; color: var(--muted); }
+.compare p { margin: 0.1rem 0; }
 .verdict.card { border-left: 4px solid var(--accent); }
 .verdict-out_of_scope, .verdict-exempt_defense, .verdict-exempt_consultation { }
 

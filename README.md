@@ -11,6 +11,16 @@ Le dossier produit complet (marché, concurrence, modèle économique, spécific
 3. **Opposabilité** — tout ce qui sort du logiciel est montrable tel quel à la CCBL ou au Bâtonnier.
 4. **Souveraineté** — hébergement UE, aucune donnée hors UE, dépendances auditées.
 
+## État — Sprints 3-4 (M5 risque & screening) ✅
+
+- **Listes de sanctions** : import versionné des listes consolidées UE et ONU (parsing XML, normalisation des noms, checksum — ré-import identique ignoré), réservé au support plateforme (`/api/v1/admin/lists/import`).
+- **Matching** (`matching.ts`, logique pure testée) : normalisation Unicode NFKD + translittération, Jaro-Winkler sur noms triés par tokens, seuil configurable, discriminants date de naissance (éliminatoire au-delà de la tolérance) et nationalité (pénalité).
+- **Screening** : run par entité enregistrant versions de listes + paramètres d'algo + sujets + résultat (US-5.4 CA), déduplication des hits, **gel automatique** de tous les dossiers non clos des clients touchés. Levée de doute motivée/signée/horodatée : faux positif → dégel si plus aucun hit actif ; confirmé → dossier maintenu gelé (US-5.5).
+- **Scoring déclaratif** (`risk_matrix_default.json`, Annexe 1) : 4 axes, seuils 4/8, instantané de la matrice conservé par évaluation (reproductibilité). **Risque élevé forcé non désactivable** : PEP, pays GAFI noire / UE haut risque, hit sanctions (US-5.2) ; l'override à la baisse est alors refusé (US-5.3, motif obligatoire sinon).
+- **Vigilance renforcée** : dossier à risque élevé → activation refusée sans origine du patrimoine documentée ni approbation `compliance`/`owner` ; dossier gelé → activation et clôture impossibles.
+- **Front** : onglet Alertes (comparaison côte à côte client/entrée de liste, décision en 2 clics documentés, § D.7-4), badge de gel et niveau de risque sur les dossiers.
+- Reste pour ce module (planifié avec M6/jobs) : téléchargement quotidien automatique des listes + re-screening planifié (BullMQ), notification e-mail du RC — le run reste manuel/API en V1 locale.
+
 ## État — Sprints 1-2 (M3 clients & BE + M4 dossiers) ✅
 
 - **M3 Clients & bénéficiaires effectifs** : clients PP (création minimale + indicateur de complétude), PM et constructions juridiques, liens BE avec règle > 25 % / contrôle par d'autres moyens, dirigeant principal à justification obligatoire (US-3.3), rôles de trust (settlor/trustee/protector/bénéficiaire).
@@ -63,6 +73,7 @@ Les tests d'intégration créent une base `lexkyc_test` jetable et s'y connecten
 
 ## Prochaines étapes (plan § D.8)
 
-- **Sprints 3-4 (M5)** : import quotidien des listes de sanctions UE/ONU (versionnées), moteur de matching (normalisation Unicode, Jaro-Winkler, discriminants), alertes bloquantes (dossier gelé + notification RC < 1 min), scoring configurable (`risk_matrix_default.json`), vigilance renforcée PEP/pays à haut risque.
-- Puis : échéancier (M6), DOS cloisonnée + tests anti tipping-off (M7), registres (M8), rapport questionnaire annuel (M9), conservation/purge (M10).
-- Dette assumée V1 locale : antivirus non branché (`av_status='skipped'` tracé), RBE/divergences (US-3.4) avec le registre M8, page « fiche client » détaillée côté front.
+- **Sprint 5 (M6)** : échéancier de vigilance continue (tableau « À faire » : pièces expirées, revues périodiques selon le risque, alertes ouvertes), notifications, revues guidées avec re-score.
+- **Sprint 6 (M7+M8)** : DOS cloisonnée + tests anti tipping-off, registres (formations, PSSF, RBE, décisions).
+- Puis : rapport questionnaire annuel (M9), conservation/purge + audit export (M10).
+- Dette assumée V1 locale : antivirus non branché (`av_status='skipped'` tracé), téléchargement auto des listes + jobs planifiés (BullMQ) et e-mails à brancher au déploiement, RBE/divergences (US-3.4) avec M8, fiche client détaillée côté front.

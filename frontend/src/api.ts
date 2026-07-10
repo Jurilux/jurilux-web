@@ -75,8 +75,32 @@ export interface MatterSummary {
   category: string;
   status: string;
   pssf: boolean;
+  frozen: boolean;
   openedAt: string;
   client: { displayName: string; kind: string };
+}
+
+export interface Alert {
+  id: string;
+  similarity: number;
+  listSource: string;
+  listExternalId: string;
+  listEntry: { names: string[]; birthDates: string[]; nationalities: string[] };
+  createdAt: string;
+  subject: {
+    personId: string;
+    fullName: string;
+    birthDate: string | null;
+    nationalities: string[];
+  } | null;
+}
+
+export interface RiskResult {
+  assessmentId: string;
+  score: number;
+  level: string;
+  matrixVersion: string;
+  factors: { id: string; axis: string; label: string; points?: number; forced?: string }[];
 }
 
 export const api = {
@@ -145,4 +169,19 @@ export const api = {
     call<{ status: string }>('POST', `/entities/${entityId}/matters/${matterId}/activate`),
   closeMatter: (entityId: string, matterId: string) =>
     call<{ status: string }>('POST', `/entities/${entityId}/matters/${matterId}/close`),
+
+  runScreening: (entityId: string) =>
+    call<{ runId: string; subjectCount: number; newHits: number }>(
+      'POST',
+      `/entities/${entityId}/screening/run`,
+    ),
+  listAlerts: (entityId: string) => call<Alert[]>('GET', `/entities/${entityId}/alerts`),
+  decideAlert: (entityId: string, hitId: string, decision: string, reason: string) =>
+    call<{ status: string; unfrozenMatters: number }>(
+      'POST',
+      `/entities/${entityId}/alerts/${hitId}/decide`,
+      { decision, reason },
+    ),
+  assessRisk: (entityId: string, matterId: string) =>
+    call<RiskResult>('POST', `/entities/${entityId}/matters/${matterId}/assess-risk`),
 };

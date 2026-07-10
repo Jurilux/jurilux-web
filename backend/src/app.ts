@@ -125,7 +125,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // --- Garde d'authentification : tout ce qui suit exige une session valide ---
   app.addHook('preHandler', async (req, reply) => {
-    if (req.url.startsWith('/api/v1/auth/') || req.url === '/api/v1/health') return;
+    // Routes publiques : auth, santé, et fichiers à URL signée (l'autorisation
+    // est la signature HMAC à durée courte, § D.5-5).
+    if (
+      req.url.startsWith('/api/v1/auth/') ||
+      req.url === '/api/v1/health' ||
+      req.url.startsWith('/api/v1/files/')
+    )
+      return;
     const token = bearerToken(req);
     const session = token ? await authenticate(authDeps, token) : null;
     if (!session) {

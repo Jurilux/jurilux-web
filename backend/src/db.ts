@@ -50,6 +50,21 @@ export async function withTenantContext<T>(
   });
 }
 
+/** Acteur « système » des traitements planifiés (audit sans FK utilisateur). */
+export const SYSTEM_ACTOR = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Contexte job : réservé aux traitements planifiés (re-screening US-5.6, purge
+ * US-10.2) pour ÉNUMÉRER les entités — chaque entité est ensuite traitée dans
+ * un contexte tenant normal.
+ */
+export async function withJobContext<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await setConfig(tx, 'app.job', 'on');
+    return fn(tx);
+  });
+}
+
 /**
  * Contexte de provisioning : uniquement pour la transaction d'onboarding qui crée
  * l'organisation et ses entités (US-2.1). Les identifiants sont pré-générés côté

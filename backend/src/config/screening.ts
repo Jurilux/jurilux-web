@@ -47,10 +47,37 @@ function load<T>(file: string, schema: z.ZodType<T>): T {
   return schema.parse(JSON.parse(readFileSync(join(here, '../../config', file), 'utf8')));
 }
 
+const sourcesSchema = z.object({
+  version: z.string(),
+  EU: z.string().url(),
+  UN: z.string().url(),
+});
+export type ListSources = z.infer<typeof sourcesSchema>;
+
 let screening: ScreeningConfig | null = null;
 let countries: CountryRiskConfig | null = null;
 let matrix: RiskMatrix | null = null;
+let sources: ListSources | null = null;
 
 export const screeningConfig = () => (screening ??= load('screening_defaults.json', screeningSchema));
 export const countryRiskConfig = () => (countries ??= load('country_risk_defaults.json', countrySchema));
 export const defaultRiskMatrix = () => (matrix ??= load('risk_matrix_default.json', matrixSchema));
+export const listSources = () => (sources ??= load('list_sources.json', sourcesSchema));
+
+/**
+ * Valide une matrice personnalisée (édition par le RC, US-5.1) : structure
+ * correcte ET présence intacte des facteurs forcés non désactivables (US-5.2).
+ */
+export function validateCustomMatrix(input: unknown): RiskMatrix {
+  const candidate = matrixSchema.parse(input);
+  const mandatory = defaultRiskMatrix().factors.filter((f) => f.removable === false);
+  for (const required of mandatory) {
+    const found = candidate.factors.find((f) => f.id === required.id);
+    if (!found || found.forced !== 'high' || found.trigger !== required.trigger) {
+      throw new Error(
+        `facteur obligatoire manquant ou altéré: ${required.id} (risque élevé forcé, non désactivable)`,
+      );
+    }
+  }
+  return candidate;
+}

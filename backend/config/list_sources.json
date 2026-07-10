@@ -1,0 +1,6 @@
+{
+  "version": "2026.1",
+  "comment": "Sources officielles des listes consolidées (téléchargement quotidien, US-5.4). L'URL UE requiert le jeton public du site 'EU Sanctions Map' ; à renseigner au déploiement.",
+  "EU": "https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw",
+  "UN": "https://scsanctions.un.org/resources/xml/en/consolidated.xml"
+}

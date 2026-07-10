@@ -579,6 +579,31 @@ model PurgeLog {
   @@map("purge_log")
 }
 
+// ============================================================================
+// Sprint 9 — matrice de risque par entité (US-5.1) et état des jobs planifiés
+// ============================================================================
+
+// Matrice de risque propre à l'entité : le RC peut ajuster facteurs et
+// pondérations ; les facteurs forcés (US-5.2) ne sont pas supprimables.
+model RiskMatrixVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityId   String   @map("entity_id") @db.Uuid
+  version    Int
+  matrixJson Json     @map("matrix_json")
+  createdBy  String   @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([entityId, version])
+  @@map("risk_matrices")
+}
+
+model JobRun {
+  job       String   @id
+  lastRunAt DateTime @map("last_run_at")
+
+  @@map("job_runs")
+}
+
 // Tête de chaîne du journal d'audit : ligne unique verrouillée FOR UPDATE à chaque
 // insertion, pour un chaînage linéaire correct même sous RLS (l'app ne voit pas
 // forcément le dernier événement des autres entités).

@@ -2,6 +2,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   hkdfSync,
   randomBytes,
   scrypt as scryptCb,
@@ -90,4 +91,16 @@ export function newOpaqueToken(): string {
 
 export function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+// Signatures HMAC-SHA256 — URLs signées à durée courte (§ D.5-5).
+export function hmacSignHex(keyHex: string, data: string): string {
+  return createHmac('sha256', Buffer.from(keyHex, 'hex')).update(data, 'utf8').digest('hex');
+}
+
+export function hmacVerifyHex(keyHex: string, data: string, signatureHex: string): boolean {
+  const expected = hmacSignHex(keyHex, data);
+  const a = Buffer.from(expected, 'hex');
+  const b = Buffer.from(signatureHex.padEnd(expected.length, '0').slice(0, expected.length), 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
 }

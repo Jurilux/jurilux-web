@@ -52,8 +52,17 @@ import {
   runPurge,
   setLegalHold,
 } from '../modules/retention/service.js';
+import {
+  getRiskMatrix,
+  massRecalcRisks,
+  updateRiskMatrix,
+} from '../modules/risk/service.js';
+import { runDailyJobs } from '../modules/jobs/service.js';
+import { annualReportPdf, argPdf, markdownishPdf } from '../pdf.js';
+import { deriveEntityKeyHex, hmacSignHex, hmacVerifyHex } from '../crypto.js';
+import { SYSTEM_ACTOR, withTenantContext } from '../db.js';
 import { can } from '../permissions.js';
-import { forbidden } from '../errors.js';
+import { forbidden, notFound } from '../errors.js';
 
 // Routes tenant-scopées : chaque handler passe par requireEntityAction (rôle +
 // permission, US-1.3) qui construit le contexte RLS restreint à l'entité visée.
@@ -343,12 +352,24 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
     return decideSuspicionReport(dosDeps, ctx, params.reportId, body.decision, body.reason);
   });
 
-  app.get('/api/v1/entities/:entityId/dos/:reportId/batonnier-dossier', async (req) => {
+  app.get('/api/v1/entities/:entityId/dos/:reportId/batonnier-dossier', async (req, reply) => {
     const params = z
       .object({ entityId: z.string().uuid(), reportId: z.string().uuid() })
       .parse(req.params);
+    const query = z.object({ format: z.enum(['json', 'pdf']).default('json') }).parse(req.query);
     const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'dos.read');
-    return batonnierDossier(dosDeps, ctx, params.reportId);
+    const dossier = await batonnierDossier(dosDeps, ctx, params.reportId);
+    if (query.format === 'pdf') {
+      const pdf = await markdownishPdf(
+        'Déclaration d’opération suspecte — transmission au Bâtonnier',
+        dossier.markdown,
+      );
+      return reply
+        .header('content-type', 'application/pdf')
+        .header('content-disposition', 'attachment; filename="dos-batonnier.pdf"')
+        .send(Buffer.from(pdf));
+    }
+    return dossier;
   });
 
   app.post('/api/v1/entities/:entityId/dos/:reportId/batonnier', async (req) => {
@@ -451,7 +472,10 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
     const { entityId } = entityParams.parse(req.params);
     const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'report.generate');
     const query = z
-      .object({ year: z.coerce.number().int().min(2020).max(2100), format: z.enum(['json', 'csv']).default('json') })
+      .object({
+        year: z.coerce.number().int().min(2020).max(2100),
+        format: z.enum(['json', 'csv', 'pdf']).default('json'),
+      })
       .parse(req.query);
     const report = await annualReport(db, ctx, query.year);
     if (query.format === 'csv') {
@@ -460,7 +484,40 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
         .header('content-disposition', `attachment; filename="questionnaire-${query.year}.csv"`)
         .send(annualReportCsv(report));
     }
+    if (query.format === 'pdf') {
+      const entity = await withTenantContext(db, ctx, (tx) =>
+        tx.complianceEntity.findUnique({ where: { id: entityId } }),
+      );
+      const pdf = await annualReportPdf(entity?.name ?? 'Entité', report);
+      return reply
+        .header('content-type', 'application/pdf')
+        .header('content-disposition', `attachment; filename="questionnaire-${query.year}.pdf"`)
+        .send(Buffer.from(pdf));
+    }
     return report;
+  });
+
+  app.get('/api/v1/entities/:entityId/arg/:argId/pdf', async (req, reply) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), argId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'report.generate');
+    const data = await withTenantContext(db, ctx, async (tx) => ({
+      arg: await tx.argDocument.findUnique({ where: { id: params.argId } }),
+      entity: await tx.complianceEntity.findUnique({ where: { id: params.entityId } }),
+    }));
+    if (!data.arg) throw notFound('ARG inconnue');
+    const pdf = await argPdf(
+      data.entity?.name ?? 'Entité',
+      data.arg.version,
+      data.arg.answersJson as Record<string, string>,
+      data.arg.statsJson as Record<string, Record<string, number>>,
+      data.arg.createdAt.toISOString().slice(0, 10),
+    );
+    return reply
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `attachment; filename="arg-v${data.arg.version}.pdf"`)
+      .send(Buffer.from(pdf));
   });
 
   app.post('/api/v1/entities/:entityId/arg', async (req, reply) => {
@@ -522,6 +579,78 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
     const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'client.write');
     const body = z.object({ csv: z.string().min(1).max(2_000_000) }).parse(req.body);
     return importClientsCsv(db, ctx, body.csv);
+  });
+
+  // --- Matrice de risque de l'entité (US-5.1) ---
+  app.get('/api/v1/entities/:entityId/risk-matrix', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'risk.assess');
+    return getRiskMatrix(db, ctx);
+  });
+
+  app.put('/api/v1/entities/:entityId/risk-matrix', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'entity.settings.manage');
+    return reply.status(201).send(await updateRiskMatrix(db, ctx, req.body));
+  });
+
+  app.post('/api/v1/entities/:entityId/risk-matrix/recalc', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'entity.settings.manage');
+    return massRecalcRisks(db, ctx);
+  });
+
+  // --- Consultation des pièces : URLs signées à durée courte (§ D.5-5) ---
+  const FILE_LINK_TTL_S = 300;
+  const fileKey = () => deriveEntityKeyHex(deps.encKeyHex, 'global', 'files');
+
+  app.post('/api/v1/entities/:entityId/documents/:docId/link', async (req) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), docId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'client.read');
+    const doc = await withTenantContext(db, ctx, (tx) =>
+      tx.document.findUnique({ where: { id: params.docId } }),
+    );
+    if (!doc) throw notFound('document inconnu');
+    const exp = Math.floor(Date.now() / 1000) + FILE_LINK_TTL_S;
+    const sig = hmacSignHex(fileKey(), `${params.docId}|${params.entityId}|${exp}`);
+    return {
+      path: `/api/v1/files/${params.docId}?e=${params.entityId}&x=${exp}&s=${sig}`,
+      expiresAt: new Date(exp * 1000).toISOString(),
+    };
+  });
+
+  // Route publique : l'autorisation EST la signature (courte durée, non rejouable après expiry).
+  app.get('/api/v1/files/:docId', async (req, reply) => {
+    const params = z.object({ docId: z.string().uuid() }).parse(req.params);
+    const query = z
+      .object({ e: z.string().uuid(), x: z.coerce.number().int(), s: z.string().length(64) })
+      .parse(req.query);
+    if (query.x < Math.floor(Date.now() / 1000)) throw forbidden('lien expiré');
+    if (!hmacVerifyHex(fileKey(), `${params.docId}|${query.e}|${query.x}`, query.s)) {
+      throw forbidden('signature invalide');
+    }
+    const doc = await withTenantContext(
+      db,
+      { userId: SYSTEM_ACTOR, entityIds: [query.e], orgIds: [] },
+      (tx) => tx.document.findUnique({ where: { id: params.docId } }),
+    );
+    if (!doc) throw notFound('document inconnu');
+    const data = await storage.get(doc.storageKey);
+    return reply
+      .header('content-type', doc.mimeType)
+      .header('content-disposition', `inline; filename="${doc.fileName.replaceAll('"', '')}"`)
+      .header('cache-control', 'private, no-store')
+      .send(data);
+  });
+
+  // --- Jobs planifiés : déclenchement manuel (plateforme) ---
+  app.post('/api/v1/admin/jobs/run-daily', async (req) => {
+    const user = await db.user.findUnique({ where: { id: req.userId! } });
+    if (!user?.isPlatformAdmin) throw forbidden('réservé au support plateforme');
+    const body = z.object({ forceRescreen: z.boolean().default(false) }).parse(req.body ?? {});
+    return runDailyJobs(db, fetch, { forceRescreen: body.forceRescreen });
   });
 
   // --- Import des listes de sanctions (plateforme, US-5.4) ---

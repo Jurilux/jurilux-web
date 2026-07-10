@@ -1,9 +1,23 @@
-import type { Db, TenantContext } from '../../db.js';
+import type { Db, TenantContext, Tx } from '../../db.js';
 import { withTenantContext } from '../../db.js';
 import { appendAudit } from '../../audit.js';
 import { badRequest, notFound } from '../../errors.js';
-import { countryRiskConfig, defaultRiskMatrix } from '../../config/screening.js';
+import {
+  countryRiskConfig,
+  defaultRiskMatrix,
+  validateCustomMatrix,
+  type RiskMatrix,
+} from '../../config/screening.js';
 import { computeRisk, type TriggerFlags } from './engine.js';
+
+/** Matrice active de l'entité : dernière version personnalisée, sinon défaut (US-5.1). */
+async function activeMatrix(tx: Tx): Promise<RiskMatrix> {
+  const custom = await tx.riskMatrixVersion.findFirst({ orderBy: { version: 'desc' } });
+  if (!custom) return defaultRiskMatrix();
+  const matrix = custom.matrixJson as RiskMatrix;
+  // Version affichée : "entité-vN" pour distinguer du défaut.
+  return { ...matrix, version: `${matrix.version}-v${custom.version}` };
+}
 
 // M5 — Évaluation du risque d'un dossier : les drapeaux sont dérivés des données
 // réelles (PEP des personnes liées, pays du dossier vs listes en configuration,
@@ -12,10 +26,10 @@ import { computeRisk, type TriggerFlags } from './engine.js';
 
 export async function assessMatterRisk(db: Db, ctx: TenantContext, matterId: string) {
   const entityId = ctx.entityIds[0]!;
-  const matrix = defaultRiskMatrix();
   const countries = countryRiskConfig();
 
   return withTenantContext(db, ctx, async (tx) => {
+    const matrix = await activeMatrix(tx);
     const matter = await tx.matter.findUnique({ where: { id: matterId } });
     if (!matter) throw notFound('dossier inconnu');
 
@@ -69,6 +83,76 @@ export async function assessMatterRisk(db: Db, ctx: TenantContext, matterId: str
       factors: result.factors,
     };
   });
+}
+
+/** Matrice active (lecture) + historique des versions. */
+export async function getRiskMatrix(db: Db, ctx: TenantContext) {
+  return withTenantContext(db, ctx, async (tx) => {
+    const matrix = await activeMatrix(tx);
+    const versions = await tx.riskMatrixVersion.findMany({
+      orderBy: { version: 'desc' },
+      select: { version: true, createdBy: true, createdAt: true },
+    });
+    return { matrix, customVersions: versions, isDefault: versions.length === 0 };
+  });
+}
+
+/**
+ * Édition de la matrice par le RC (US-5.1) : structure validée, facteurs forcés
+ * intouchables (US-5.2), versionnée — les évaluations passées gardent leur instantané.
+ */
+export async function updateRiskMatrix(db: Db, ctx: TenantContext, input: unknown) {
+  const entityId = ctx.entityIds[0]!;
+  let matrix: RiskMatrix;
+  try {
+    matrix = validateCustomMatrix(input);
+  } catch (e) {
+    throw badRequest('invalid_matrix', String(e instanceof Error ? e.message : e));
+  }
+  return withTenantContext(db, ctx, async (tx) => {
+    const last = await tx.riskMatrixVersion.findFirst({ orderBy: { version: 'desc' } });
+    const version = (last?.version ?? 0) + 1;
+    await tx.riskMatrixVersion.create({
+      data: { entityId, version, matrixJson: matrix as never, createdBy: ctx.userId },
+    });
+    await appendAudit(tx, {
+      entityId,
+      actorId: ctx.userId,
+      action: 'risk.matrix_updated',
+      objectId: `v${version}`,
+    });
+    return { version };
+  });
+}
+
+/**
+ * Recalcul en masse après changement de matrice (US-5.1 CA) : ré-évalue tous les
+ * dossiers non clos et rend le rapport des différences.
+ */
+export async function massRecalcRisks(db: Db, ctx: TenantContext) {
+  const matters = await withTenantContext(db, ctx, (tx) =>
+    tx.matter.findMany({ where: { status: { not: 'closed' } }, select: { id: true, title: true } }),
+  );
+  const before = new Map<string, string>();
+  await withTenantContext(db, ctx, async (tx) => {
+    for (const m of matters) {
+      const latest = await tx.riskAssessment.findFirst({
+        where: { matterId: m.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (latest) before.set(m.id, (latest.overrideLevel ?? latest.level) as string);
+    }
+  });
+
+  const changes: { matterId: string; title: string; before: string | null; after: string }[] = [];
+  for (const m of matters) {
+    const result = await assessMatterRisk(db, ctx, m.id);
+    const prev = before.get(m.id) ?? null;
+    if (prev !== result.level) {
+      changes.push({ matterId: m.id, title: m.title, before: prev, after: result.level });
+    }
+  }
+  return { reassessed: matters.length, changes };
 }
 
 /** Override manuel du niveau (US-5.3) : motif obligatoire, tracé, visible dans les exports. */

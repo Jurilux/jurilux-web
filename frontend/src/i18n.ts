@@ -73,6 +73,8 @@ const resources = {
         mattersCount_one: '{{count}} dossier',
         mattersCount_other: '{{count}} dossiers',
         kind: { natural: 'PP', legal: 'PM', arrangement: 'Construction' },
+        portalLink: 'Lien de dépôt client',
+        portalLinkReady: 'Lien copié (valable 7 jours) — à transmettre au client :',
       },
       matters: {
         title: 'Dossiers',
@@ -255,6 +257,8 @@ const resources = {
         mattersCount_one: '{{count}} matter',
         mattersCount_other: '{{count}} matters',
         kind: { natural: 'Individual', legal: 'Company', arrangement: 'Arrangement' },
+        portalLink: 'Client upload link',
+        portalLinkReady: 'Link copied (valid 7 days) — send it to your client:',
       },
       matters: {
         title: 'Matters',

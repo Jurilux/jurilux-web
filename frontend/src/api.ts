@@ -186,6 +186,11 @@ export const api = {
     call<RiskResult>('POST', `/entities/${entityId}/matters/${matterId}/assess-risk`),
 
   todoBoard: (entityId: string) => call<TodoBoard>('GET', `/entities/${entityId}/todo`),
+  createPortalLink: (entityId: string, clientId: string) =>
+    call<{ path: string; expiresAt: string }>(
+      'POST',
+      `/entities/${entityId}/clients/${clientId}/portal-link`,
+    ),
   reportSuspicion: (entityId: string, matterId: string, description: string) =>
     call<{ acknowledged: boolean }>('POST', `/entities/${entityId}/matters/${matterId}/suspicion`, {
       description,

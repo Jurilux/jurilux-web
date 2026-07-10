@@ -265,6 +265,7 @@ function ClientsPanel(props: { entityId: string; clients: ClientSummary[]; onCha
   const [lastName, setLastName] = useState('');
   const [name, setName] = useState('');
   const [country, setCountry] = useState('LU');
+  const [portalLink, setPortalLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
@@ -334,10 +335,29 @@ function ClientsPanel(props: { entityId: string; clients: ClientSummary[]; onCha
             <span className="muted">
               {t('clients.mattersCount', { count: c.mattersCount })}
             </span>
+            <div className="row">
+              <button
+                className="secondary"
+                onClick={() =>
+                  void api.createPortalLink(props.entityId, c.id).then((link) => {
+                    const url = `${window.location.origin}${link.path}`;
+                    void navigator.clipboard?.writeText(url).catch(() => {});
+                    setPortalLink(url);
+                  })
+                }
+              >
+                {t('clients.portalLink')}
+              </button>
+            </div>
           </li>
         ))}
         {props.clients.length === 0 && <li className="muted">{t('clients.empty')}</li>}
       </ul>
+      {portalLink && (
+        <p className="help" role="status">
+          {t('clients.portalLinkReady')} <code>{portalLink}</code>
+        </p>
+      )}
     </div>
   );
 }

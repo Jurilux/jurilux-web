@@ -4,6 +4,7 @@ import {
   adminSetPlan, adminSetAdmin, adminDeleteUser,
   adminHealth, adminGetConfig, adminPatchConfig, adminAudit, adminPurge,
   adminTests, adminTestsRun, adminTestsImport, AdminTests, FSection, FRes,
+  adminTestsCatalogue, TestsCatalogue, CatParcours, CatCas,
   logout, HttpError,
   AdminOverview, AdminUser, AdminQuestion, AdminFeedback, ActivityDay, ProbeHit, EvalReport,
   AdminHealth, AuditEntry,
@@ -725,11 +726,122 @@ function FSectionView({ titre, section, echecsSeuls }:
   );
 }
 
+// ---------- Catalogue de la suite : intention / parcours / résultat attendu ----------
+// Vue STATIQUE (aucune exécution) : rend lisible ce que la suite couvre — chaque
+// parcours utilisateur (objectif + étapes « qui fait quoi ») et chaque cas de la
+// matrice (intention + action + attente par profil).
+function CatParcoursView({ p, ouvert }: { p: CatParcours; ouvert: boolean }) {
+  return (
+    <details className="ftests-fonc" open={ouvert}>
+      <summary>
+        🧭 <b>{p.objectif}</b>
+        <span className="muted"> — {p.profil} · {p.etapes.length} étapes</span>
+      </summary>
+      <table className="admin-table ftests-cat-table">
+        <thead><tr><th>#</th><th>Acteur</th><th>Étape</th><th>Action</th><th>Résultat attendu</th></tr></thead>
+        <tbody>
+          {p.etapes.map((e, i) => (
+            <tr key={i}>
+              <td className="muted">{i + 1}</td>
+              <td>{e.acteur}</td>
+              <td>{e.libelle}</td>
+              <td><code className="ftests-casid">{e.action}</code></td>
+              <td><span className={`ftests-chip ${e.attendu.startsWith('HTTP') ? 'refus' : e.attendu === 'refus gracieux' ? 'gracieux' : 'ok'}`}>{e.attendu}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
+function CatMatriceView({ fonc, cas, ouvert }: { fonc: string; cas: CatCas[]; ouvert: boolean }) {
+  return (
+    <details className="ftests-fonc" open={ouvert}>
+      <summary><b>{fonc}</b><span className="muted"> — {cas.length} cas</span></summary>
+      <table className="admin-table ftests-cat-table">
+        <thead><tr><th>Intention</th><th>Action</th><th>Attendu par profil</th></tr></thead>
+        <tbody>
+          {cas.map((c) => (
+            <tr key={c.id}>
+              <td>{c.intention}</td>
+              <td><code className="ftests-casid">{c.action}</code></td>
+              <td>
+                <span className="ftests-profils">
+                  {c.attentes.map((a, i) => (
+                    <span key={i}
+                      className={`ftests-chip ${a.attendu.startsWith('HTTP') ? 'refus' : a.attendu === 'refus gracieux' ? 'gracieux' : 'ok'}`}>
+                      {a.profil} : {a.attendu}
+                    </span>
+                  ))}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
+function CatalogueView() {
+  const [cat, setCat] = useState<TestsCatalogue | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    adminTestsCatalogue().then(setCat)
+      .catch((e) => setErr(e instanceof Error ? e.message : 'Erreur'));
+  }, []);
+  if (err) return <p className="warn">⚠ {err}</p>;
+  if (!cat) return <p className="muted">Chargement…</p>;
+  if (!cat.disponible) {
+    return <p className="muted">Le catalogue n'est pas disponible ici (paquet
+      <code> functional/</code> absent de l'image).</p>;
+  }
+
+  const needle = q.trim().toLowerCase();
+  const contient = (...xs: string[]) => xs.some((x) => x.toLowerCase().includes(needle));
+  const parcours = !needle ? cat.parcours : cat.parcours.filter((p) =>
+    contient(p.objectif, p.profil) || p.etapes.some((e) => contient(e.libelle, e.action, e.acteur)));
+  const parFonc = new Map<string, CatCas[]>();
+  for (const c of cat.matrice) {
+    if (needle && !contient(c.fonctionnalite, c.intention, c.action, c.id)) continue;
+    if (!parFonc.has(c.fonctionnalite)) parFonc.set(c.fonctionnalite, []);
+    parFonc.get(c.fonctionnalite)!.push(c);
+  }
+
+  return (
+    <>
+      <div className="ftests-kpis">
+        <div className="ftests-kpi"><b>{cat.totaux.parcours}</b><span>parcours utilisateur</span></div>
+        <div className="ftests-kpi"><b>{cat.totaux.etapes}</b><span>étapes de parcours</span></div>
+        <div className="ftests-kpi"><b>{cat.totaux.cas}</b><span>cas de matrice</span></div>
+        <div className="ftests-kpi"><b>{cat.totaux.etapes + cat.totaux.assertions_matrice}</b><span>assertions au total</span></div>
+      </div>
+      <input className="ftests-cat-search" type="search" value={q}
+        placeholder="Filtrer (intention, endpoint, acteur…)"
+        onChange={(e) => setQ(e.target.value)} />
+      <section className="ftests-sec">
+        <h3>Parcours utilisateur <span className="muted">— objectif, étapes enchaînées, attendu</span></h3>
+        {parcours.length === 0 && <p className="muted">Aucun parcours ne correspond au filtre.</p>}
+        {parcours.map((p) => <CatParcoursView key={p.id} p={p} ouvert={!!needle} />)}
+      </section>
+      <section className="ftests-sec">
+        <h3>Matrice endpoint × profil <span className="muted">— intention, action, attente par profil</span></h3>
+        {parFonc.size === 0 && <p className="muted">Aucun cas ne correspond au filtre.</p>}
+        {[...parFonc.entries()].map(([fonc, cas]) =>
+          <CatMatriceView key={fonc} fonc={fonc} cas={cas} ouvert={!!needle} />)}
+      </section>
+    </>
+  );
+}
+
 function TestsTab() {
   const [data, setData] = useState<AdminTests | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [echecsSeuls, setEchecsSeuls] = useState(false);
+  const [vue, setVue] = useState<'rapport' | 'catalogue'>('rapport');
   const enCours = data?.execution.statut === 'en_cours';
 
   const charger = () => adminTests().then((d) => { setData(d); setErr(null); })
@@ -766,6 +878,15 @@ function TestsTab() {
   return (
     <div className="ftests">
       <div className="ftests-bar">
+        <div className="ftests-vues">
+          <button className={vue === 'rapport' ? 'primary' : 'ghost'}
+            onClick={() => setVue('rapport')}>Rapport</button>
+          <button className={vue === 'catalogue' ? 'primary' : 'ghost'}
+            onClick={() => setVue('catalogue')}
+            title="Ce que la suite couvre : intention, parcours, résultat attendu — sans exécution">
+            📖 Catalogue</button>
+        </div>
+        {vue === 'rapport' && <>
         <button className="primary" onClick={lancer} disabled={!data.executable || enCours}
           title={data.executable ? 'Joue la suite en sous-processus isolé (base jetable)'
             : 'Suite non embarquée dans cette image — importer un rapport JSON'}>
@@ -780,7 +901,9 @@ function TestsTab() {
           <input type="checkbox" checked={echecsSeuls} onChange={(e) => setEchecsSeuls(e.target.checked)} />
           {' '}échecs seulement
         </label>
+        </>}
       </div>
+      {vue === 'catalogue' ? <CatalogueView /> : <>
       {note && <p className="muted">{note}</p>}
       {err && <p className="warn">⚠ {err}</p>}
       {data.execution.statut === 'erreur' && (
@@ -837,6 +960,7 @@ function TestsTab() {
           )}
         </>
       )}
+      </>}
     </div>
   );
 }

@@ -1084,6 +1084,15 @@ a.nav-item { display: block; text-decoration: none; }
 .ftests-chip.ok { color: var(--green, #12855a); }
 .ftests-chip.ko { color: #fff; background: var(--red, #c0392b); border-color: transparent; }
 .ftests-score-ok { color: var(--green, #12855a); font-weight: 600; }
+/* Catalogue de la suite (intention / parcours / attendu) */
+.ftests-vues { display: flex; gap: 6px; margin-right: 8px; }
+.ftests-chip.refus { color: var(--muted); }                       /* refus attendu (401/403/404…) */
+.ftests-chip.gracieux { color: var(--accent, #7a5af5); }          /* refus gracieux (200 refused) */
+.ftests-cat-search { width: 100%; max-width: 420px; margin: 10px 0 4px; padding: 7px 12px;
+  border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; }
+.ftests-cat-table { margin: 8px 0 4px; width: 100%; }
+.ftests-cat-table td, .ftests-cat-table th { vertical-align: top; }
+.ftests-cat-table code { white-space: nowrap; }
 .ftests-score-ko { color: var(--red, #c0392b); font-weight: 600; }
 
 /* Pied de barre latérale : liens d'action (déconnexion + mentions) */

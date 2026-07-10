@@ -463,7 +463,19 @@ export interface AdminTests {
   execution: { statut: string; demarre_a: string | null; erreur: string | null };
   executable: boolean;
 }
+// Catalogue lisible de la suite (intention / parcours / attendu), sans exécution.
+export interface CatEtape { libelle: string; acteur: string; action: string; attendu: string; }
+export interface CatParcours { id: string; objectif: string; profil: string; etapes: CatEtape[]; }
+export interface CatCas {
+  id: string; fonctionnalite: string; intention: string; action: string;
+  attentes: { profil: string; attendu: string }[];
+}
+export interface TestsCatalogue {
+  disponible: boolean; parcours: CatParcours[]; matrice: CatCas[];
+  totaux: { parcours: number; etapes: number; cas: number; assertions_matrice: number };
+}
 export const adminTests = () => adminGet<AdminTests>('/api/admin/tests');
+export const adminTestsCatalogue = () => adminGet<TestsCatalogue>('/api/admin/tests/catalogue');
 export const adminTestsRun = () => request<void>('/api/admin/tests/run', 'POST');
 export const adminTestsImport = (rapport: unknown) =>
   request<{ total: number; verts: number }>('/api/admin/tests/rapport', 'POST', rapport);

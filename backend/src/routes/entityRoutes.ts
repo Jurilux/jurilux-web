@@ -20,6 +20,25 @@ import {
 import { expiringDocuments, uploadDocument } from '../modules/documents/service.js';
 import { decideHit, importList, listOpenAlerts, runScreening } from '../modules/screening/service.js';
 import { assessMatterRisk, overrideMatterRisk } from '../modules/risk/service.js';
+import { completePeriodicReview, todoBoard } from '../modules/vigilance/service.js';
+import {
+  batonnierDossier,
+  createSuspicionReport,
+  decideSuspicionReport,
+  listSuspicionReports,
+  recordBatonnierTransmission,
+  type DosDeps,
+} from '../modules/dos/service.js';
+import {
+  addPssfMandate,
+  addRbeCheck,
+  addTraining,
+  decisionsRegistry,
+  endPssfMandate,
+  listPssfMandates,
+  listRbeChecks,
+  listTrainings,
+} from '../modules/registries/service.js';
 import { can } from '../permissions.js';
 import { forbidden } from '../errors.js';
 
@@ -118,10 +137,12 @@ const clientParams = z.object({ entityId: z.string().uuid(), clientId: z.string(
 export interface EntityRouteDeps {
   db: Db;
   storage: StorageAdapter;
+  encKeyHex: string;
 }
 
 export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps): void {
   const { db, storage } = deps;
+  const dosDeps: DosDeps = { db, encKeyHex: deps.encKeyHex };
 
   // --- Clients (M3) ---
   app.post('/api/v1/entities/:entityId/clients/natural', async (req, reply) => {
@@ -255,6 +276,161 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
       .object({ level: z.enum(['low', 'medium', 'high']), reason: z.string().min(1).max(2000) })
       .parse(req.body);
     return overrideMatterRisk(db, ctx, matterId, body.level, body.reason);
+  });
+
+  // --- Vigilance continue (M6) ---
+  app.get('/api/v1/entities/:entityId/todo', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'matter.read');
+    return todoBoard(db, ctx);
+  });
+
+  app.post('/api/v1/entities/:entityId/matters/:matterId/review', async (req) => {
+    const { entityId, matterId } = matterParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'matter.write');
+    const body = z
+      .object({
+        checklist: z.object({
+          identityStillValid: z.boolean(),
+          beneficialOwnersUnchanged: z.boolean(),
+          activityConsistent: z.boolean(),
+        }),
+        notes: z.string().max(4000).optional(),
+      })
+      .parse(req.body);
+    return completePeriodicReview(db, ctx, matterId, body.checklist, body.notes);
+  });
+
+  // --- DOS (M7, cloisonnée) ---
+  app.post('/api/v1/entities/:entityId/matters/:matterId/suspicion', async (req, reply) => {
+    const { entityId, matterId } = matterParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'dos.create');
+    const body = z.object({ description: z.string().min(1).max(20000) }).parse(req.body);
+    const ack = await createSuspicionReport(dosDeps, ctx, matterId, body.description);
+    return reply.status(201).send(ack);
+  });
+
+  app.get('/api/v1/entities/:entityId/dos', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'dos.read');
+    return listSuspicionReports(dosDeps, ctx);
+  });
+
+  app.post('/api/v1/entities/:entityId/dos/:reportId/decide', async (req) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), reportId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'dos.decide');
+    const body = z
+      .object({
+        decision: z.enum(['declared', 'no_declaration']),
+        reason: z.string().min(1).max(4000),
+      })
+      .parse(req.body);
+    return decideSuspicionReport(dosDeps, ctx, params.reportId, body.decision, body.reason);
+  });
+
+  app.get('/api/v1/entities/:entityId/dos/:reportId/batonnier-dossier', async (req) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), reportId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'dos.read');
+    return batonnierDossier(dosDeps, ctx, params.reportId);
+  });
+
+  app.post('/api/v1/entities/:entityId/dos/:reportId/batonnier', async (req) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), reportId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'dos.decide');
+    const body = z
+      .object({ sentAt: z.string().date(), goamlRef: z.string().max(100).optional() })
+      .parse(req.body);
+    return recordBatonnierTransmission(dosDeps, ctx, params.reportId, body);
+  });
+
+  // --- Registres (M8) ---
+  app.post('/api/v1/entities/:entityId/registries/trainings', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'registry.write');
+    const body = z
+      .object({
+        personLabel: z.string().min(1).max(200),
+        trainingDate: z.string().date(),
+        title: z.string().min(1).max(300),
+        hours: z.number().positive().max(200),
+        organism: z.string().max(200).optional(),
+        attestationDocId: z.string().uuid().optional(),
+      })
+      .parse(req.body);
+    return reply.status(201).send(await addTraining(db, ctx, body));
+  });
+
+  app.get('/api/v1/entities/:entityId/registries/trainings', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'registry.read');
+    const query = z.object({ year: z.coerce.number().int().optional() }).parse(req.query);
+    return listTrainings(db, ctx, query.year);
+  });
+
+  app.post('/api/v1/entities/:entityId/registries/pssf', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'registry.write');
+    const body = z
+      .object({
+        companyName: z.string().min(1).max(300),
+        function: z.string().min(1).max(200),
+        startDate: z.string().date(),
+        endDate: z.string().date().optional(),
+        matterId: z.string().uuid().optional(),
+      })
+      .parse(req.body);
+    return reply.status(201).send(await addPssfMandate(db, ctx, body));
+  });
+
+  app.get('/api/v1/entities/:entityId/registries/pssf', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'registry.read');
+    return listPssfMandates(db, ctx);
+  });
+
+  app.post('/api/v1/entities/:entityId/registries/pssf/:mandateId/end', async (req) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), mandateId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'registry.write');
+    const body = z.object({ endDate: z.string().date() }).parse(req.body);
+    return endPssfMandate(db, ctx, params.mandateId, body.endDate);
+  });
+
+  app.post('/api/v1/entities/:entityId/registries/rbe', async (req, reply) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'registry.write');
+    const body = z
+      .object({
+        clientId: z.string().uuid(),
+        checkedAt: z.string().date(),
+        extractDocId: z.string().uuid().optional(),
+        divergence: z.boolean().optional(),
+        divergenceDetails: z.string().max(4000).optional(),
+        decision: z.string().max(2000).optional(),
+        reported: z.boolean().optional(),
+        reportedAt: z.string().date().optional(),
+      })
+      .parse(req.body);
+    return reply.status(201).send(await addRbeCheck(db, ctx, body));
+  });
+
+  app.get('/api/v1/entities/:entityId/registries/rbe', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'registry.read');
+    return listRbeChecks(db, ctx);
+  });
+
+  app.get('/api/v1/entities/:entityId/registries/decisions', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx, role } = await requireEntityAction(db, req.userId!, entityId, 'registry.read');
+    return decisionsRegistry(db, ctx, can(role, 'dos.read'));
   });
 
   // --- Import des listes de sanctions (plateforme, US-5.4) ---

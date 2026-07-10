@@ -219,7 +219,17 @@ export async function activateMatter(
       }
     }
 
-    await tx.matter.update({ where: { id: matterId }, data: { status: 'active' } });
+    // Échéance de revue périodique selon le risque (M6) : faible par défaut si
+    // aucun scoring — la revue re-scorera de toute façon.
+    const level = (latestAssessment?.overrideLevel ?? latestAssessment?.level ?? 'low') as
+      | 'low'
+      | 'medium'
+      | 'high';
+    const years = regulatoryConfig().review_interval_years[level];
+    const nextReviewAt = new Date();
+    nextReviewAt.setFullYear(nextReviewAt.getFullYear() + years);
+
+    await tx.matter.update({ where: { id: matterId }, data: { status: 'active', nextReviewAt } });
     await appendAudit(tx, {
       entityId,
       actorId: ctx.userId,
@@ -227,7 +237,7 @@ export async function activateMatter(
       objectType: 'matter',
       objectId: matterId,
     });
-    return { status: 'active' as const };
+    return { status: 'active' as const, nextReviewAt };
   });
 }
 

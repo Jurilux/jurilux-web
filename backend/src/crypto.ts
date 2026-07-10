@@ -2,6 +2,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  hkdfSync,
   randomBytes,
   scrypt as scryptCb,
   timingSafeEqual,
@@ -65,6 +66,22 @@ export function decryptSecret(payload: string, keyHex: string): string {
   const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
   decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
   return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+}
+
+/**
+ * Clé dérivée PAR ENTITÉ (HKDF-SHA256) à partir de la clé maîtresse : les DOS
+ * sont chiffrées avec une clé distincte par entité (US-7.4) — la compromission
+ * d'une clé dérivée n'expose pas les autres entités.
+ */
+export function deriveEntityKeyHex(masterKeyHex: string, entityId: string, purpose: string): string {
+  const derived = hkdfSync(
+    'sha256',
+    Buffer.from(masterKeyHex, 'hex'),
+    Buffer.from(entityId, 'utf8'),
+    Buffer.from(`lexkyc:${purpose}`, 'utf8'),
+    32,
+  );
+  return Buffer.from(derived).toString('hex');
 }
 
 export function newOpaqueToken(): string {

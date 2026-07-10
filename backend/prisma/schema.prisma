@@ -302,6 +302,8 @@ model Matter {
   thirdPartyIntroducer Boolean      @default(false) @map("third_party_introducer")
   // Gel du dossier sur hit sanctions non levé (US-5.4 : alerte bloquante)
   frozen             Boolean        @default(false)
+  // Vigilance continue (M6) : échéance de revue selon le risque
+  nextReviewAt       DateTime?      @map("next_review_at")
   openedAt           DateTime       @default(now()) @map("opened_at")
   closedAt           DateTime?      @map("closed_at")
   // Point de départ des 5 ans de conservation (US-4.4) — posé à la clôture.
@@ -444,6 +446,104 @@ model RiskAssessment {
 
   @@index([entityId, matterId, createdAt])
   @@map("risk_assessments")
+}
+
+// ============================================================================
+// M6 — Vigilance continue · M7 — DOS cloisonnée · M8 — Registres (Sprints 5-6)
+// ============================================================================
+
+// Revue périodique guidée (US-6.3) : checklist → re-score → nouvelle échéance.
+model PeriodicReview {
+  id             String   @id @default(uuid()) @db.Uuid
+  entityId       String   @map("entity_id") @db.Uuid
+  matterId       String   @map("matter_id") @db.Uuid
+  checklistJson  Json     @map("checklist_json")
+  notes          String?
+  riskLevelAfter String   @map("risk_level_after")
+  nextDueAt      DateTime @map("next_due_at")
+  decidedBy      String   @map("decided_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([entityId, matterId])
+  @@map("periodic_reviews")
+}
+
+enum DosStatus {
+  internal
+  under_review
+  declared
+  no_declaration
+  closed
+}
+
+// DOS (M7) — module cloisonné : contenu chiffré avec une clé DÉRIVÉE PAR ENTITÉ
+// (US-7.4) ; visible uniquement des rôles compliance/owner (permissions), invisible
+// de son auteur après création (anti tipping-off, US-7.1).
+model SuspicionReport {
+  id                String    @id @default(uuid()) @db.Uuid
+  entityId          String    @map("entity_id") @db.Uuid
+  matterId          String    @map("matter_id") @db.Uuid
+  createdBy         String    @map("created_by") @db.Uuid
+  encryptedPayload  String    @map("encrypted_payload")
+  status            DosStatus @default(internal)
+  decisionReasonEnc String?   @map("decision_reason_enc")
+  decidedBy         String?   @map("decided_by") @db.Uuid
+  decidedAt         DateTime? @map("decided_at")
+  batonnierSentAt   DateTime? @map("batonnier_sent_at")
+  goamlRef          String?   @map("goaml_ref")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([entityId, status])
+  @@map("suspicion_reports")
+}
+
+// M8 — Registre des formations (RIO Titre 14) : total annuel calculable.
+model TrainingRecord {
+  id               String   @id @default(uuid()) @db.Uuid
+  entityId         String   @map("entity_id") @db.Uuid
+  personLabel      String   @map("person_label")
+  trainingDate     DateTime @map("training_date") @db.Date
+  title            String
+  hours            Decimal  @db.Decimal(5, 2)
+  organism         String?
+  attestationDocId String?  @map("attestation_doc_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([entityId, trainingDate])
+  @@map("training_records")
+}
+
+// M8 — Registre des mandats PSSF : alimente le questionnaire PSSF.
+model PssfMandate {
+  id          String    @id @default(uuid()) @db.Uuid
+  entityId    String    @map("entity_id") @db.Uuid
+  companyName String    @map("company_name")
+  function    String
+  startDate   DateTime  @map("start_date") @db.Date
+  endDate     DateTime? @map("end_date") @db.Date
+  matterId    String?   @map("matter_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([entityId])
+  @@map("pssf_mandates")
+}
+
+// M8 — Registre RBE (US-3.4) : consultations et divergences.
+model RbeCheck {
+  id                String    @id @default(uuid()) @db.Uuid
+  entityId          String    @map("entity_id") @db.Uuid
+  clientId          String    @map("client_id") @db.Uuid
+  checkedAt         DateTime  @map("checked_at") @db.Date
+  extractDocId      String?   @map("extract_doc_id") @db.Uuid
+  divergence        Boolean   @default(false)
+  divergenceDetails String?   @map("divergence_details")
+  decision          String?
+  reported          Boolean   @default(false)
+  reportedAt        DateTime? @map("reported_at") @db.Date
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([entityId, clientId])
+  @@map("rbe_checks")
 }
 
 // Tête de chaîne du journal d'audit : ligne unique verrouillée FOR UPDATE à chaque

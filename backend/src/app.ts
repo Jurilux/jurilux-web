@@ -155,6 +155,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerEntityRoutes(app, {
     db: deps.db,
     storage: deps.storage ?? new LocalFsStorage(deps.env.DATA_DIR),
+    encKeyHex: deps.env.APP_ENC_KEY,
   });
 
   return app;

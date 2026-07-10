@@ -130,7 +130,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (
       req.url.startsWith('/api/v1/auth/') ||
       req.url === '/api/v1/health' ||
-      req.url.startsWith('/api/v1/files/')
+      req.url.startsWith('/api/v1/files/') ||
+      req.url.startsWith('/api/v1/portal')
     )
       return;
     const token = bearerToken(req);

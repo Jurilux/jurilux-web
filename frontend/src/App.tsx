@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, api, type UserEntity } from './api';
 import Workspace from './Workspace';
+import Portal from './Portal';
 import i18n from './i18n';
 
 // Sprint 0 : parcours connexion (MFA obligatoire), enrôlement, onboarding de
@@ -17,6 +18,24 @@ type Screen =
 export default function App() {
   const { t } = useTranslation();
   const [screen, setScreen] = useState<Screen>({ name: 'login' });
+
+  // Portail client (M11) : page publique via lien magique, sans session.
+  const params = new URLSearchParams(window.location.search);
+  const portalEntity = window.location.pathname === '/portal' ? params.get('e') : null;
+  const portalToken = params.get('t');
+  if (portalEntity && portalToken) {
+    return (
+      <div className="shell">
+        <header>
+          <h1>{t('appName')}</h1>
+          <p className="tagline">{t('portal.tagline')}</p>
+        </header>
+        <main>
+          <Portal entityId={portalEntity} token={portalToken} />
+        </main>
+      </div>
+    );
+  }
 
   const toggleLang = () => {
     const next = i18n.language === 'fr' ? 'en' : 'fr';

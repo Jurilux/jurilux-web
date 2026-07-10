@@ -11,6 +11,12 @@ Le dossier produit complet (marché, concurrence, modèle économique, spécific
 3. **Opposabilité** — tout ce qui sort du logiciel est montrable tel quel à la CCBL ou au Bâtonnier.
 4. **Souveraineté** — hébergement UE, aucune donnée hors UE, dépendances auditées.
 
+## État — M11 Portail client ✅
+
+- **Lien magique** généré par l'avocat pour un client (jeton opaque haché en base, TTL 7 jours, révocable), URL publique `/portal?e=…&t=…`.
+- **Page de dépôt sans compte** : le client final téléverse ses pièces (MIME vérifié sur le contenu) et confirme ses bénéficiaires effectifs, avec **consentement RGPD explicite obligatoire** (base légale affichée).
+- **Propositions** : chaque dépôt arrive en `pending` ; l'avocat valide ou rejette — un document rejeté est **supprimé** (minimisation). Rate-limit serré sur les routes publiques.
+
 ## État — Production (archive chiffrée · e-mails · Docker) ✅
 
 - **Archive chiffrée export CCBL** (US-9.2) : `POST /exports/ccbl/archive` → `tar.gz` chiffré AES-256-GCM (clé scrypt dérivée d'une phrase de passe jamais stockée), incluant `export.json`, un README et les **pièces binaires** des dossiers échantillonnés ; altération détectée (GCM), pièce manquante signalée dans l'archive.
@@ -95,7 +101,7 @@ Les tests d'intégration créent une base `lexkyc_test` jetable et s'y connecten
 
 ## Reste à faire avant lancement commercial
 
-- Adaptateur SMTP réel (interface `Mailer` prête) + alertes immédiates par e-mail ; antivirus ClamAV sur l'upload.
-- Portail client (M11, phase 2), écrans détaillés fiche client/BE, audit WCAG AA, WebAuthn en plus de TOTP.
+- Adaptateur SMTP réel (interface `Mailer` prête) + alertes immédiates par e-mail ; antivirus ClamAV sur l'upload ; e-IDV en option (adaptateur prévu).
+- Écrans détaillés fiche client/BE, audit WCAG AA, WebAuthn en plus de TOTP.
 - Choix de l'hébergeur souverain, KMS pour `APP_ENC_KEY`, jeton public de l'URL liste UE (`config/list_sources.json`), pentest externe.
 - Fonctionnel : effectifs/mode d'exercice saisis par le RC dans le rapport annuel ; interviews avocats (Annexe 2 du dossier) pour valider vocabulaire et prix.

@@ -60,6 +60,14 @@ import {
 import { runDailyJobs } from '../modules/jobs/service.js';
 import { annualReportPdf, argPdf, markdownishPdf } from '../pdf.js';
 import { encryptedArchive } from '../archive.js';
+import {
+  createPortalLink,
+  decideSubmission,
+  listSubmissions,
+  portalConfirmBe,
+  portalUpload,
+  portalView,
+} from '../modules/portal/service.js';
 import { deriveEntityKeyHex, hmacSignHex, hmacVerifyHex } from '../crypto.js';
 import { SYSTEM_ACTOR, withTenantContext } from '../db.js';
 import { can } from '../permissions.js';
@@ -705,6 +713,72 @@ export function registerEntityRoutes(app: FastifyInstance, deps: EntityRouteDeps
       .header('content-disposition', `inline; filename="${doc.fileName.replaceAll('"', '')}"`)
       .header('cache-control', 'private, no-store')
       .send(data);
+  });
+
+  // --- Portail client (M11) ---
+  app.post('/api/v1/entities/:entityId/clients/:clientId/portal-link', async (req, reply) => {
+    const { entityId, clientId } = clientParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'client.write');
+    return reply.status(201).send(await createPortalLink(db, ctx, clientId));
+  });
+
+  app.get('/api/v1/entities/:entityId/portal-submissions', async (req) => {
+    const { entityId } = entityParams.parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, entityId, 'client.read');
+    return listSubmissions(db, ctx);
+  });
+
+  app.post('/api/v1/entities/:entityId/portal-submissions/:submissionId/decide', async (req) => {
+    const params = z
+      .object({ entityId: z.string().uuid(), submissionId: z.string().uuid() })
+      .parse(req.params);
+    const { ctx } = await requireEntityAction(db, req.userId!, params.entityId, 'client.write');
+    const body = z.object({ decision: z.enum(['accepted', 'rejected']) }).parse(req.body);
+    return decideSubmission(db, ctx, params.submissionId, body.decision);
+  });
+
+  // Routes PUBLIQUES du portail : l'autorisation est le lien magique (jeton
+  // haché en base, TTL 7 jours) ; rate-limit serré.
+  const portalLimit = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
+  const portalQuery = z.object({ e: z.string().uuid(), t: z.string().min(20).max(100) });
+
+  app.get('/api/v1/portal', portalLimit, async (req) => {
+    const { e, t } = portalQuery.parse(req.query);
+    return portalView(db, e, t);
+  });
+
+  app.post('/api/v1/portal/documents', portalLimit, async (req, reply) => {
+    const { e, t } = portalQuery.parse(req.query);
+    const file = await req.file();
+    if (!file) throw badRequest('file_required');
+    const data = await file.toBuffer();
+    const fields = Object.fromEntries(
+      Object.entries(file.fields).flatMap(([k, v]) =>
+        v && 'value' in (v as object) ? [[k, (v as { value: string }).value]] : [],
+      ),
+    );
+    const meta = z
+      .object({ docType: z.string().min(1).max(50), consent: z.enum(['true', 'false']) })
+      .parse(fields);
+    const result = await portalUpload(db, storage, e, t, {
+      docType: meta.docType,
+      fileName: file.filename,
+      data,
+      consent: meta.consent === 'true',
+    });
+    return reply.status(201).send(result);
+  });
+
+  app.post('/api/v1/portal/be-confirmation', portalLimit, async (req, reply) => {
+    const { e, t } = portalQuery.parse(req.query);
+    const body = z
+      .object({
+        confirmed: z.boolean(),
+        comment: z.string().max(4000).optional(),
+        consent: z.literal(true),
+      })
+      .parse(req.body);
+    return reply.status(201).send(await portalConfirmBe(db, e, t, body));
   });
 
   // --- Jobs planifiés : déclenchement manuel (plateforme) ---

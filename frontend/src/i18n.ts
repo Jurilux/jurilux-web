@@ -151,6 +151,30 @@ const resources = {
         staleRcs: 'Extraits RCS de plus de 6 mois',
         purgeUpcoming: 'Purges de conservation à venir (J-90)',
       },
+      portal: {
+        tagline: 'Dépôt sécurisé de documents',
+        title: 'Espace de dépôt — {{firm}}',
+        intro:
+          'Bonjour {{client}}. Votre avocat vous invite à déposer les pièces nécessaires à votre dossier. Ce lien est personnel : ne le partagez pas.',
+        expires: 'Lien valable jusqu’au {{date}}.',
+        uploadTitle: 'Déposer une pièce',
+        docType: 'Type de pièce',
+        docTypes: {
+          id_card: "Carte d'identité",
+          passport: 'Passeport',
+          rcs_extract: 'Extrait RCS',
+          statutes: 'Statuts',
+          proof_of_address: 'Justificatif d’adresse',
+          other: 'Autre',
+        },
+        file: 'Fichier (PDF, PNG ou JPEG)',
+        consent:
+          'J’accepte que ces documents soient traités par l’étude dans le cadre de ses obligations légales de lutte contre le blanchiment (base légale : obligation légale).',
+        send: 'Déposer',
+        sent: 'Reçu : {{files}}. Votre avocat validera ces pièces.',
+        invalidLink: 'Ce lien est invalide ou a expiré. Contactez votre avocat.',
+        badFile: 'Format refusé : PDF, PNG ou JPEG uniquement (contenu vérifié).',
+      },
       dos: {
         report: 'Signaler',
         description: 'Description des faits et pièces',
@@ -308,6 +332,30 @@ const resources = {
         expiringDocs: 'Expired or expiring documents',
         staleRcs: 'RCS extracts older than 6 months',
         purgeUpcoming: 'Upcoming retention purges (D-90)',
+      },
+      portal: {
+        tagline: 'Secure document upload',
+        title: 'Upload area — {{firm}}',
+        intro:
+          'Hello {{client}}. Your lawyer invites you to upload the documents needed for your file. This link is personal: do not share it.',
+        expires: 'Link valid until {{date}}.',
+        uploadTitle: 'Upload a document',
+        docType: 'Document type',
+        docTypes: {
+          id_card: 'ID card',
+          passport: 'Passport',
+          rcs_extract: 'RCS extract',
+          statutes: 'Articles of association',
+          proof_of_address: 'Proof of address',
+          other: 'Other',
+        },
+        file: 'File (PDF, PNG or JPEG)',
+        consent:
+          'I agree that these documents are processed by the firm under its legal anti-money-laundering obligations (legal basis: legal obligation).',
+        send: 'Upload',
+        sent: 'Received: {{files}}. Your lawyer will validate these documents.',
+        invalidLink: 'This link is invalid or has expired. Contact your lawyer.',
+        badFile: 'Format rejected: PDF, PNG or JPEG only (content checked).',
       },
       dos: {
         report: 'Report',

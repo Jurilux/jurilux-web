@@ -604,6 +604,49 @@ model JobRun {
   @@map("job_runs")
 }
 
+// ============================================================================
+// M11 — Portail client (phase 2, version minimale)
+// ============================================================================
+
+// Lien magique à durée limitée (US M11) : le jeton n'est stocké qu'en SHA-256.
+model PortalLink {
+  id        String    @id @default(uuid()) @db.Uuid
+  entityId  String    @map("entity_id") @db.Uuid
+  clientId  String    @map("client_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([entityId, clientId])
+  @@map("portal_links")
+}
+
+enum SubmissionStatus {
+  pending
+  accepted
+  rejected
+}
+
+// Dépôt du client final : arrive en « proposition » que l'avocat valide.
+model PortalSubmission {
+  id          String           @id @default(uuid()) @db.Uuid
+  entityId    String           @map("entity_id") @db.Uuid
+  linkId      String           @map("link_id") @db.Uuid
+  clientId    String           @map("client_id") @db.Uuid
+  kind        String // document | be_confirmation
+  documentId  String?          @map("document_id") @db.Uuid
+  payloadJson Json?            @map("payload_json")
+  status      SubmissionStatus @default(pending)
+  decidedBy   String?          @map("decided_by") @db.Uuid
+  decidedAt   DateTime?        @map("decided_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([entityId, status])
+  @@map("portal_submissions")
+}
+
 // Tête de chaîne du journal d'audit : ligne unique verrouillée FOR UPDATE à chaque
 // insertion, pour un chaînage linéaire correct même sous RLS (l'app ne voit pas
 // forcément le dernier événement des autres entités).
